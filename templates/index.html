@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reverse Turing Test</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="app">
+        <!-- Title Screen -->
+        <div id="title-screen" class="screen">
+            <div class="container text-center">
+                <h1 class="title">REVERSE TURING TEST</h1>
+                <h2 class="subtitle">Can you disguise yourself as an AI?</h2>
+                <div class="mt-5">
+                    <button id="start-button" class="btn btn-primary btn-lg">Start Game</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Character Selection Screen -->
+        <div id="character-select-screen" class="screen d-none">
+            <div class="container">
+                <h2 class="screen-title text-center">Choose Your Character</h2>
+                <div id="character-list" class="character-list mt-4">
+                    <!-- Character cards will be inserted here -->
+                </div>
+                <div class="text-center mt-4">
+                    <button id="select-character-button" class="btn btn-primary btn-lg">Select Character</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Question Screen -->
+        <div id="question-screen" class="screen d-none">
+            <div class="container">
+                <div class="round-info text-center">
+                    <h2 id="round-title">Round 1/5</h2>
+                </div>
+                <div class="question-container mt-4">
+                    <h3 id="question-category" class="text-center"></h3>
+                    <p id="question-text" class="question-text mt-3"></p>
+                </div>
+                <div class="character-info text-center mt-4">
+                    <div id="character-avatar" class="avatar mx-auto"></div>
+                    <p id="character-name" class="mt-2"></p>
+                </div>
+                <div class="response-container mt-4">
+                    <h4>Your Response:</h4>
+                    <textarea id="response-input" class="form-control" rows="4"></textarea>
+                    <div class="text-center mt-3">
+                        <button id="submit-response-button" class="btn btn-primary">Submit Response</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Responses Screen -->
+        <div id="responses-screen" class="screen d-none">
+            <div class="container">
+                <div class="round-info text-center">
+                    <h2 id="responses-round-title">Round 1/5 - All Responses</h2>
+                </div>
+                <div class="question-container mt-4">
+                    <p id="responses-question-text" class="question-text"></p>
+                </div>
+                <div id="responses-list" class="responses-list mt-4">
+                    <!-- Response bubbles will be inserted here -->
+                </div>
+                <div class="text-center mt-4">
+                    <button id="continue-to-suspicions-button" class="btn btn-primary">Continue to Suspicions</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Suspicions Screen -->
+        <div id="suspicions-screen" class="screen d-none">
+            <div class="container">
+                <div class="round-info text-center">
+                    <h2 id="suspicions-round-title">Round 1/5 - Suspicions</h2>
+                </div>
+                <div id="suspicion-input-container">
+                    <p class="instruction-text mt-4">Express your suspicions about who might be human (1-2 sentences):</p>
+                    <textarea id="suspicion-input" class="form-control" rows="4"></textarea>
+                    <div class="text-center mt-3">
+                        <button id="submit-suspicion-button" class="btn btn-primary">Submit Suspicion</button>
+                    </div>
+                </div>
+                <div id="suspicions-list-container" class="d-none">
+                    <div id="suspicions-list" class="suspicions-list mt-4">
+                        <!-- Suspicion bubbles will be inserted here -->
+                    </div>
+                    <div class="text-center mt-4">
+                        <button id="continue-button" class="btn btn-primary">Continue</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voting Screen -->
+        <div id="voting-screen" class="screen d-none">
+            <div class="container">
+                <div class="round-info text-center">
+                    <h2>Final Voting</h2>
+                </div>
+                <p class="instruction-text mt-4">
+                    Based on all the responses and suspicions, who do you think is the human player?
+                    Remember, as the human player, you should vote for someone else to maintain your cover.
+                </p>
+                <div id="voting-options" class="voting-options mt-4">
+                    <!-- Voting options will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="results-screen" class="screen d-none">
+            <div class="container">
+                <div class="round-info text-center">
+                    <h2>Voting Results</h2>
+                </div>
+                <div class="results-container mt-4">
+                    <h3>Each player's vote:</h3>
+                    <ul id="votes-list" class="votes-list">
+                        <!-- Votes will be inserted here -->
+                    </ul>
+                    <h3 class="mt-4">Vote Tally:</h3>
+                    <ul id="vote-tally" class="vote-tally">
+                        <!-- Vote tally will be inserted here -->
+                    </ul>
+                    <div id="result-announcement" class="result-announcement mt-4">
+                        <!-- Result announcement will be inserted here -->
+                    </div>
+                </div>
+                <div class="text-center mt-5">
+                    <button id="play-again-button" class="btn btn-primary btn-lg me-3">Play Again</button>
+                    <button id="exit-button" class="btn btn-danger btn-lg">Exit</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay d-none">
+            <div class="spinner-border text-light" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="loading-text mt-3">AI characters are thinking...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
