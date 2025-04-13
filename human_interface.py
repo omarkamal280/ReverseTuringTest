@@ -15,6 +15,7 @@ class TerminalInterface:
     def __init__(self):
         """Initialize the terminal interface."""
         self.input_buffer = ""
+        self.game_mode = "standard"
     
     def clear_screen(self):
         """Clear the terminal screen."""
@@ -211,6 +212,81 @@ class TerminalInterface:
         
         print("\nThanks for playing the Reverse Turing Test!")
         input("\nPress Enter to exit...")
+        
+    # Interrogation Mode Methods
+    
+    def display_interrogation_mode_intro(self):
+        """Display introduction to interrogation mode."""
+        self.clear_screen()
+        print(Fore.CYAN + Style.BRIGHT + """
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║       I N T E R R O G A T I O N    M O D E                   ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+""" + Style.RESET_ALL)
+        
+        print("In this mode, characters will introduce themselves and then take turns")
+        print("interrogating each other to determine who is the human player.")
+        print("\nThe game consists of:")
+        print("1. Character introductions")
+        print("2. Multiple rounds of interrogations")
+        print("3. Suspicion statements after each round")
+        print("4. Final voting")
+        print("\nYour goal is to blend in as an AI character and avoid being identified as the human.")
+    
+    def display_introductions(self, characters):
+        """Display all character introductions."""
+        self.clear_screen()
+        print(f"\n{Fore.YELLOW}Character Introductions:{Style.RESET_ALL}\n")
+        
+        for char in characters:
+            if hasattr(char, 'introduction'):
+                print(f"{Fore.CYAN}{char.name}:{Style.RESET_ALL} \"{char.introduction}\"")
+                print()
+    
+    def get_interrogation_target(self, interrogator_name, available_targets):
+        """Let human player choose who to interrogate."""
+        print(f"\n{Fore.YELLOW}As {interrogator_name}, choose a character to interrogate:{Style.RESET_ALL}\n")
+        
+        for i, target in enumerate(available_targets, 1):
+            print(f"{i}. {target}")
+        
+        while True:
+            try:
+                choice = int(input("\nEnter your choice (number): "))
+                if 1 <= choice <= len(available_targets):
+                    return choice - 1
+                print(f"{Fore.RED}Invalid choice. Please try again.{Style.RESET_ALL}")
+            except ValueError:
+                print(f"{Fore.RED}Please enter a number.{Style.RESET_ALL}")
+    
+    def get_interrogation_question(self, interrogator_name, target_name):
+        """Let human player create an interrogation question."""
+        print(f"\n{Fore.YELLOW}As {interrogator_name}, create a question to ask {target_name}:{Style.RESET_ALL}")
+        print("Make your question challenging but answerable in 1-2 sentences.")
+        return input("> ")
+    
+    def display_interrogation_question(self, interrogator_name, target_name, question):
+        """Display an interrogation question."""
+        print(f"\n{Fore.CYAN}{interrogator_name} asks {target_name}:{Style.RESET_ALL}")
+        print(f"\"{question}\"")
+    
+    def get_interrogation_response(self, responder_name, interrogator_name, question):
+        """Let human player respond to an interrogation."""
+        print(f"\n{Fore.YELLOW}As {responder_name}, respond to {interrogator_name}'s question:{Style.RESET_ALL}")
+        print("Remember to stay in character and try to appear as an AI would.")
+        return input("> ")
+    
+    def display_interrogation_response(self, responder_name, response):
+        """Display a response to an interrogation."""
+        print(f"\n{Fore.CYAN}{responder_name} responds:{Style.RESET_ALL}")
+        print(f"\"{response}\"")
+    
+    def display_interrogation_analysis(self, analyzer_name, analysis):
+        """Display an analysis of an interrogation."""
+        print(f"\n{Fore.CYAN}{analyzer_name}'s analysis:{Style.RESET_ALL}")
+        print(f"\"{analysis}\"")
 
 
 class GraphicalInterface:

@@ -111,7 +111,7 @@ Provide a response (2-3 sentences) that reflects your character's personality an
             if len(char.responses) >= round_num:
                 responses_text += f"{char.name}: \"{char.responses[round_num-1]}\"\n\n"
         
-        return f"""You are roleplaying as a character in a game where one player is human and the rest are AI. 
+        prompt = f"""You are roleplaying as a character in a game where one player is human and the rest are AI. 
 Your goal is to identify the human based on their responses.
 
 {self.character.get_prompt_description()}
@@ -123,8 +123,12 @@ Here are all the responses:
 {responses_text}
 
 As {self.character.name}, express your suspicions about who might be the human player in 1-2 sentences.
-Use your character's speech style. Don't directly accuse anyone yet, just share your thoughts.
+Use your character's speech style. Don't directly accuse anyone yet, just share your thoughts naming who are you suspecting.
 """
+        
+        print(f"\n=== STANDARD MODE SUSPICION PROMPT FOR {self.character.name} ===\n{prompt}\n===========\n")
+        
+        return prompt
     
     def _create_vote_prompt(self, all_characters):
         """Create prompt for final vote."""
@@ -157,7 +161,7 @@ Respond with just the character's name that you're voting for.
         """Call OpenAI API with the given prompt."""
         try:
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": prompt},
                 ],

@@ -5,6 +5,7 @@
 // Game state
 const gameState = {
     gameId: null,
+    gameMode: 'standard', // 'standard' or 'interrogation'
     characters: [],
     selectedCharacterIndex: null,
     humanCharacter: null,
@@ -15,7 +16,14 @@ const gameState = {
     suspicions: {},
     votes: {},
     gameOver: false,
-    humanWon: null
+    humanWon: null,
+    // Interrogation mode specific
+    introductions: [],
+    interrogations: {},
+    interrogationOrder: [],
+    currentInterrogator: null,
+    currentTarget: null,
+    currentInterrogationQuestion: null
 };
 
 // DOM Elements
@@ -26,7 +34,14 @@ const screens = {
     responses: document.getElementById('responses-screen'),
     suspicions: document.getElementById('suspicions-screen'),
     voting: document.getElementById('voting-screen'),
-    results: document.getElementById('results-screen')
+    results: document.getElementById('results-screen'),
+    // Interrogation mode screens
+    introduction: document.getElementById('introduction-screen'),
+    introductionsDisplay: document.getElementById('introductions-display-screen'),
+    interrogation: document.getElementById('interrogation-screen'),
+    interrogationResponse: document.getElementById('interrogation-response-screen'),
+    interrogationSummary: document.getElementById('interrogation-summary-screen'),
+    interrogationSuspicions: document.getElementById('interrogation-suspicions-screen')
 };
 
 const loadingOverlay = document.getElementById('loading-overlay');
@@ -49,6 +64,20 @@ function showScreen(screenId) {
     
     // Show the requested screen
     screens[screenId].classList.remove('d-none');
+    
+    // Show conversation history tab for gameplay screens
+    const gameplayScreens = ['question', 'responses', 'suspicions', 'voting', 'introduction', 'introductionsDisplay', 'interrogation', 'interrogationResponse', 'interrogationSummary', 'interrogationSuspicions'];
+    
+    if (gameplayScreens.includes(screenId) && gameState.gameId) {
+        document.getElementById('conversation-history-tab').classList.remove('d-none');
+        
+        // Auto-refresh conversation history if enabled
+        if (document.getElementById('auto-refresh-history').checked) {
+            fetchConversationHistory();
+        }
+    } else {
+        document.getElementById('conversation-history-tab').classList.add('d-none');
+    }
     
     // Scroll to top
     window.scrollTo(0, 0);
@@ -109,11 +138,26 @@ async function startGame() {
     try {
         showLoading('Starting new game...');
         
+        // Get selected game mode
+        const gameModeRadios = document.getElementsByName('gameMode');
+        let selectedMode = 'standard';
+        for (const radio of gameModeRadios) {
+            if (radio.checked) {
+                selectedMode = radio.value;
+                break;
+            }
+        }
+        
+        gameState.gameMode = selectedMode;
+        
         const response = await fetch('/api/start_game', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify({
+                game_mode: selectedMode
+            })
         });
         
         if (!response.ok) {
@@ -166,14 +210,21 @@ async function selectCharacter() {
         
         // Update game state
         gameState.currentRound = data.round;
-        gameState.currentQuestion = data.question;
         gameState.humanCharacter = data.character;
         
-        // Show question screen
-        displayQuestion();
-        
-        hideLoading();
-        showScreen('question');
+        // Handle based on game mode
+        if (gameState.gameMode === 'standard') {
+            gameState.currentQuestion = data.question;
+            // Show question screen
+            displayQuestion();
+            hideLoading();
+            showScreen('question');
+        } else if (gameState.gameMode === 'interrogation') {
+            // Show introduction screen
+            displayIntroductionScreen();
+            hideLoading();
+            showScreen('introduction');
+        }
     } catch (error) {
         console.error('Error selecting character:', error);
         hideLoading();
@@ -570,10 +621,562 @@ function displayResults() {
     resultAnnouncement.appendChild(resultMessage);
 }
 
+// Interrogation Mode Functions
+async function displayIntroductionScreen() {
+    // Display character info
+    const characterAvatar = document.getElementById('intro-character-avatar');
+    characterAvatar.className = `avatar ${avatarColors[gameState.humanCharacter.name] || 'avatar-tech'}`;
+    characterAvatar.textContent = getInitials(gameState.humanCharacter.name);
+    
+    document.getElementById('intro-character-name').textContent = gameState.humanCharacter.name;
+}
+
+async function submitIntroduction() {
+    const introductionInput = document.getElementById('introduction-input');
+    const introduction = introductionInput.value.trim();
+    
+    if (!introduction) {
+        alert('Please enter an introduction.');
+        return;
+    }
+    
+    try {
+        showLoading('AI characters are introducing themselves...');
+        
+        const response = await fetch('/api/submit_introduction', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                introduction: introduction
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to submit introduction');
+        }
+        
+        const data = await response.json();
+        
+        // Update game state
+        gameState.introductions = data.introductions;
+        
+        // Display all introductions
+        displayAllIntroductions();
+        
+        hideLoading();
+        showScreen('introductionsDisplay');
+    } catch (error) {
+        console.error('Error submitting introduction:', error);
+        hideLoading();
+        alert('Failed to submit introduction. Please try again.');
+    }
+}
+
+function displayAllIntroductions() {
+    const introductionsList = document.getElementById('introductions-list');
+    introductionsList.innerHTML = '';
+    
+    gameState.introductions.forEach(intro => {
+        const bubble = createMessageBubble(intro.character_name, intro.introduction);
+        introductionsList.appendChild(bubble);
+    });
+}
+
+async function startInterrogationRound() {
+    try {
+        showLoading('Starting interrogation round...');
+        
+        const response = await fetch('/api/start_interrogation_round', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to start interrogation round');
+        }
+        
+        const data = await response.json();
+        
+        // Update game state
+        gameState.currentRound = data.round;
+        gameState.totalRounds = data.total_rounds;
+        gameState.interrogationOrder = data.interrogation_order;
+        
+        // Get the first interrogation turn
+        await getNextInterrogationTurn();
+        
+        hideLoading();
+    } catch (error) {
+        console.error('Error starting interrogation round:', error);
+        hideLoading();
+        alert('Failed to start interrogation round. Please try again.');
+    }
+}
+
+async function getNextInterrogationTurn() {
+    try {
+        showLoading('Getting next interrogation turn...');
+        
+        const response = await fetch('/api/get_interrogation_turn', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to get interrogation turn');
+        }
+        
+        const data = await response.json();
+        
+        // Check if round is complete
+        if (data.round_complete) {
+            // Show round summary
+            displayInterrogationSummary();
+            hideLoading();
+            showScreen('interrogationSummary');
+            return;
+        }
+        
+        // Update game state
+        gameState.currentInterrogator = data.interrogator;
+        
+        // Update UI
+        document.getElementById('interrogation-round-title').textContent = `Round ${gameState.currentRound}/${gameState.totalRounds} - Interrogation`;
+        document.getElementById('current-interrogator').textContent = data.interrogator;
+        
+        // Show appropriate controls based on whose turn it is
+        if (data.is_human_turn) {
+            // Human's turn to interrogate
+            document.getElementById('human-interrogation-controls').classList.remove('d-none');
+            document.getElementById('ai-interrogation-display').classList.add('d-none');
+            
+            // Display target options
+            displayInterrogationTargets(data.available_targets);
+        } else {
+            // AI's turn to interrogate
+            document.getElementById('human-interrogation-controls').classList.add('d-none');
+            document.getElementById('ai-interrogation-display').classList.remove('d-none');
+            
+            // Display AI's choice
+            document.getElementById('ai-target-name').textContent = data.ai_target;
+            document.getElementById('ai-question-text').textContent = data.ai_question;
+            
+            // Store AI's question and target
+            gameState.currentTarget = data.ai_target;
+            gameState.currentInterrogationQuestion = data.ai_question;
+        }
+        
+        hideLoading();
+        showScreen('interrogation');
+    } catch (error) {
+        console.error('Error getting interrogation turn:', error);
+        hideLoading();
+        alert('Failed to get interrogation turn. Please try again.');
+    }
+}
+
+function displayInterrogationTargets(targets) {
+    const targetsContainer = document.getElementById('interrogation-targets');
+    targetsContainer.innerHTML = '';
+    
+    targets.forEach(targetName => {
+        const targetCard = document.createElement('div');
+        targetCard.className = 'character-card';
+        targetCard.dataset.name = targetName;
+        
+        const avatar = createCharacterAvatar(targetName);
+        const name = document.createElement('p');
+        name.textContent = targetName;
+        
+        targetCard.appendChild(avatar);
+        targetCard.appendChild(name);
+        
+        targetCard.addEventListener('click', () => {
+            // Remove selection from all cards
+            document.querySelectorAll('.character-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Add selection to this card
+            targetCard.classList.add('selected');
+            
+            // Store selected target
+            gameState.currentTarget = targetName;
+        });
+        
+        targetsContainer.appendChild(targetCard);
+    });
+}
+
+async function submitInterrogation() {
+    if (!gameState.currentTarget) {
+        alert('Please select a character to interrogate.');
+        return;
+    }
+    
+    const questionInput = document.getElementById('interrogation-question-input');
+    const question = questionInput.value.trim();
+    
+    if (!question) {
+        alert('Please enter a question.');
+        return;
+    }
+    
+    try {
+        showLoading('Submitting interrogation...');
+        
+        const response = await fetch('/api/submit_interrogation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                target: gameState.currentTarget,
+                question: question
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to submit interrogation');
+        }
+        
+        const data = await response.json();
+        
+        // Store the question for later
+        gameState.currentInterrogationQuestion = question;
+        
+        // If target is human, show response screen
+        if (data.is_human_target) {
+            hideLoading();
+            // We'll handle this in the next turn
+            getNextInterrogationTurn();
+        } else {
+            // Show AI response
+            document.getElementById('response-interrogator').textContent = gameState.currentInterrogator;
+            document.getElementById('response-question').textContent = question;
+            document.getElementById('response-round-title').textContent = `Round ${gameState.currentRound}/${gameState.totalRounds} - Response`;
+            
+            document.getElementById('human-response-controls').classList.add('d-none');
+            document.getElementById('ai-response-display').classList.remove('d-none');
+            document.getElementById('ai-response-text').textContent = data.interrogation.response;
+            
+            hideLoading();
+            showScreen('interrogationResponse');
+        }
+    } catch (error) {
+        console.error('Error submitting interrogation:', error);
+        hideLoading();
+        alert('Failed to submit interrogation. Please try again.');
+    }
+}
+
+async function continueAfterAIInterrogation() {
+    try {
+        showLoading('Submitting AI interrogation...');
+        
+        const response = await fetch('/api/submit_interrogation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                target: gameState.currentTarget,
+                question: gameState.currentInterrogationQuestion
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to submit AI interrogation');
+        }
+        
+        const data = await response.json();
+        
+        // If target is human, show response screen
+        if (data.is_human_target) {
+            // Show response screen for human to respond
+            document.getElementById('response-interrogator').textContent = gameState.currentInterrogator;
+            document.getElementById('response-question').textContent = gameState.currentInterrogationQuestion;
+            document.getElementById('response-round-title').textContent = `Round ${gameState.currentRound}/${gameState.totalRounds} - Response`;
+            
+            document.getElementById('human-response-controls').classList.remove('d-none');
+            document.getElementById('ai-response-display').classList.add('d-none');
+            document.getElementById('interrogation-response-input').value = '';
+            
+            hideLoading();
+            showScreen('interrogationResponse');
+        } else {
+            // Show AI response
+            document.getElementById('response-interrogator').textContent = gameState.currentInterrogator;
+            document.getElementById('response-question').textContent = gameState.currentInterrogationQuestion;
+            document.getElementById('response-round-title').textContent = `Round ${gameState.currentRound}/${gameState.totalRounds} - Response`;
+            
+            document.getElementById('human-response-controls').classList.add('d-none');
+            document.getElementById('ai-response-display').classList.remove('d-none');
+            document.getElementById('ai-response-text').textContent = data.interrogation.response;
+            
+            hideLoading();
+            showScreen('interrogationResponse');
+        }
+    } catch (error) {
+        console.error('Error submitting AI interrogation:', error);
+        hideLoading();
+        alert('Failed to submit AI interrogation. Please try again.');
+    }
+}
+
+async function submitInterrogationResponse() {
+    const responseInput = document.getElementById('interrogation-response-input');
+    const response = responseInput.value.trim();
+    
+    if (!response) {
+        alert('Please enter a response.');
+        return;
+    }
+    
+    try {
+        showLoading('Submitting response...');
+        
+        const apiResponse = await fetch('/api/submit_interrogation_response', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                response: response
+            })
+        });
+        
+        if (!apiResponse.ok) {
+            throw new Error('Failed to submit response');
+        }
+        
+        // Get next interrogation turn
+        await getNextInterrogationTurn();
+        
+        hideLoading();
+    } catch (error) {
+        console.error('Error submitting response:', error);
+        hideLoading();
+        alert('Failed to submit response. Please try again.');
+    }
+}
+
+function displayInterrogationSummary() {
+    document.getElementById('summary-round-title').textContent = `Round ${gameState.currentRound}/${gameState.totalRounds} - Summary`;
+    
+    // We would need to fetch the interrogation data for this round
+    // For now, just show a placeholder message
+    const summaryContainer = document.getElementById('interrogation-summary');
+    summaryContainer.innerHTML = '<p>All interrogations for this round are complete. Continue to see suspicions.</p>';
+}
+
+async function submitInterrogationSuspicion() {
+    const suspicionInput = document.getElementById('interrogation-suspicion-input');
+    const suspicion = suspicionInput.value.trim();
+    
+    if (!suspicion) {
+        alert('Please enter your suspicions.');
+        return;
+    }
+    
+    try {
+        showLoading('AI characters are thinking...');
+        
+        const response = await fetch('/api/submit_interrogation_suspicion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                suspicion: suspicion
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to submit suspicion');
+        }
+        
+        const data = await response.json();
+        
+        // Hide input container and show suspicions list
+        document.getElementById('interrogation-suspicion-input-container').classList.add('d-none');
+        document.getElementById('interrogation-suspicions-list-container').classList.remove('d-none');
+        
+        // Display all suspicions
+        const suspicionsList = document.getElementById('interrogation-suspicions-list');
+        suspicionsList.innerHTML = '';
+        
+        data.suspicions.forEach(suspicionData => {
+            const bubble = createMessageBubble(suspicionData.character_name, suspicionData.suspicion, true);
+            suspicionsList.appendChild(bubble);
+        });
+        
+        // Store next action
+        gameState.nextAction = data.next_action;
+        gameState.nextRound = data.next_round;
+        
+        hideLoading();
+    } catch (error) {
+        console.error('Error submitting suspicion:', error);
+        hideLoading();
+        alert('Failed to submit suspicion. Please try again.');
+    }
+}
+
+function handleAfterInterrogationSuspicions() {
+    if (gameState.nextAction === 'next_round') {
+        // Start next round
+        startInterrogationRound();
+    } else if (gameState.nextAction === 'voting') {
+        // Show voting screen
+        displayVoting();
+        showScreen('voting');
+    }
+}
+
+// Conversation History Functions
+async function fetchConversationHistory() {
+    try {
+        if (!gameState.gameId) return;
+        
+        const response = await fetch('/api/get_conversation_history', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch conversation history');
+        }
+        
+        const data = await response.json();
+        displayConversationHistory(data.conversation_history);
+    } catch (error) {
+        console.error('Error fetching conversation history:', error);
+    }
+}
+
+function displayConversationHistory(history) {
+    const historyContent = document.getElementById('conversation-history-content');
+    historyContent.innerHTML = '';
+    
+    if (!history || history.length === 0) {
+        historyContent.innerHTML = '<p class="text-muted">No conversation history yet.</p>';
+        return;
+    }
+    
+    // Group by rounds
+    let currentRound = -1;
+    
+    history.forEach(item => {
+        // Add round separator if needed
+        if (item.round !== currentRound) {
+            currentRound = item.round;
+            const roundHeader = document.createElement('div');
+            roundHeader.className = 'round-separator my-3';
+            
+            let roundTitle;
+            if (currentRound === 0) {
+                roundTitle = 'Introductions';
+            } else {
+                roundTitle = `Round ${currentRound}`;
+            }
+            
+            roundHeader.innerHTML = `<h6 class="text-center border-bottom pb-2">${roundTitle}</h6>`;
+            historyContent.appendChild(roundHeader);
+        }
+        
+        // Create message element based on type
+        const messageEl = document.createElement('div');
+        messageEl.className = 'history-message mb-2';
+        
+        let messageContent = '';
+        
+        switch (item.type) {
+            case 'introduction':
+                messageContent = `<strong>${item.character}</strong> introduced: "${item.content}"`;
+                messageEl.classList.add('introduction-message');
+                break;
+                
+            case 'question':
+                messageContent = `<strong>${item.character}</strong> asked <strong>${item.target}</strong>: "${item.content}"`;
+                messageEl.classList.add('question-message');
+                break;
+                
+            case 'response':
+                messageContent = `<strong>${item.character}</strong> responded to <strong>${item.to}</strong>: "${item.content}"`;
+                messageEl.classList.add('response-message');
+                break;
+                
+            case 'suspicion':
+                messageContent = `<strong>${item.character}'s suspicion</strong>: "${item.content}"`;
+                messageEl.classList.add('suspicion-message');
+                break;
+        }
+        
+        messageEl.innerHTML = messageContent;
+        historyContent.appendChild(messageEl);
+    });
+    
+    // Scroll to bottom
+    historyContent.scrollTop = historyContent.scrollHeight;
+}
+
+function toggleConversationHistory() {
+    const panel = document.getElementById('conversation-history-panel');
+    const icon = document.getElementById('conversation-history-icon');
+    
+    if (panel.classList.contains('d-none')) {
+        // Show panel
+        panel.classList.remove('d-none');
+        icon.textContent = '❌';
+        fetchConversationHistory();
+    } else {
+        // Hide panel
+        panel.classList.add('d-none');
+        icon.textContent = '📜';
+    }
+}
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
     // Title Screen
     document.getElementById('start-button').addEventListener('click', startGame);
+    
+    // Game mode selection
+    const gameModeRadios = document.getElementsByName('gameMode');
+    for (const radio of gameModeRadios) {
+        radio.addEventListener('change', updateModeDescription);
+    }
+    
+    // Conversation History
+    document.getElementById('toggle-conversation-history').addEventListener('click', toggleConversationHistory);
+    document.getElementById('close-conversation-history').addEventListener('click', () => {
+        document.getElementById('conversation-history-panel').classList.add('d-none');
+        document.getElementById('conversation-history-icon').textContent = '📜';
+    });
+    document.getElementById('refresh-conversation-history').addEventListener('click', fetchConversationHistory);
     
     // Character Selection Screen
     document.getElementById('select-character-button').addEventListener('click', selectCharacter);
@@ -594,9 +1197,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // Suspicions Screen
     document.getElementById('submit-suspicion-button').addEventListener('click', submitSuspicion);
     
+    // Interrogation Mode
+    // Introduction Screen
+    document.getElementById('submit-introduction-button').addEventListener('click', submitIntroduction);
+    
+    // Introductions Display Screen
+    document.getElementById('start-interrogation-button').addEventListener('click', startInterrogationRound);
+    
+    // Interrogation Screen
+    document.getElementById('submit-interrogation-button').addEventListener('click', submitInterrogation);
+    document.getElementById('continue-ai-interrogation-button').addEventListener('click', continueAfterAIInterrogation);
+    
+    // Interrogation Response Screen
+    document.getElementById('submit-response-to-interrogation-button').addEventListener('click', submitInterrogationResponse);
+    document.getElementById('continue-after-response-button').addEventListener('click', getNextInterrogationTurn);
+    
+    // Interrogation Summary Screen
+    document.getElementById('continue-to-interrogation-suspicions-button').addEventListener('click', () => {
+        showScreen('interrogationSuspicions');
+        document.getElementById('interrogation-suspicions-round-title').textContent = `Round ${gameState.currentRound}/${gameState.totalRounds} - Suspicions`;
+    });
+    
+    // Interrogation Suspicions Screen
+    document.getElementById('submit-interrogation-suspicion-button').addEventListener('click', submitInterrogationSuspicion);
+    document.getElementById('continue-after-interrogation-suspicions-button').addEventListener('click', handleAfterInterrogationSuspicions);
+    
     // Results Screen
     document.getElementById('play-again-button').addEventListener('click', resetGame);
     document.getElementById('exit-button').addEventListener('click', () => {
         showScreen('title');
     });
 });
+
+function updateModeDescription() {
+    const modeDescription = document.getElementById('mode-description');
+    const selectedMode = document.querySelector('input[name="gameMode"]:checked').value;
+    
+    if (selectedMode === 'standard') {
+        modeDescription.innerHTML = '<p><strong>Standard Mode:</strong> Answer preset questions over 5 rounds.</p>';
+    } else {
+        modeDescription.innerHTML = '<p><strong>Interrogation Mode:</strong> Characters introduce themselves and directly question each other.</p>';
+    }
+}

@@ -7,6 +7,7 @@ import argparse
 from dotenv import load_dotenv
 from human_interface import TerminalInterface
 from game_engine import GameEngine
+from interrogation_mode import InterrogationGameEngine
 
 def check_api_key():
     """Check if OpenAI API key is available."""
@@ -28,6 +29,8 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Reverse Turing Test Game')
     parser.add_argument('--terminal', action='store_true', help='Run in terminal mode')
+    parser.add_argument('--mode', choices=['standard', 'interrogation'], default='standard',
+                      help='Game mode: standard (preset questions) or interrogation (characters question each other)')
     args = parser.parse_args()
     
     # Check for API key
@@ -35,13 +38,17 @@ def main():
         input("Press Enter to exit...")
         sys.exit(1)
     
-    # Create game engine
-    game = GameEngine()
+    # Create appropriate game engine based on mode
+    if args.mode == 'interrogation':
+        game = InterrogationGameEngine(None)
+    else:
+        game = GameEngine()
     
     # Set interface based on arguments
     if args.terminal:
         # Terminal mode
         interface = TerminalInterface()
+        interface.game_mode = args.mode
         game.interface = interface
     else:
         # GUI mode
