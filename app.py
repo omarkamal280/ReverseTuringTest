@@ -661,7 +661,7 @@ def _choose_ai_interrogation_target(ai_player, available_targets, game_state):
     
     You can interrogate one of these characters: {', '.join(available_targets)}
     
-    Which character do you want to interrogate? Choose the one you find most suspicious or want to learn more about.
+    Which character do you want to interrogate? Choose the one you find most suspicious or has odd behavior to the rest.
     Respond with ONLY the character's name.
     """
     
@@ -694,16 +694,13 @@ def _generate_ai_question(ai_player, target_character, round_num, game_state):
     
     You want to determine if {target_character.name} is a human or AI.
     
-    About {target_character.name}:
-    {target_character.get_prompt_description()}
     
     Previous interactions with {target_character.name}:
     {history}
     
     Generate ONE specific question to ask {target_character.name} that might reveal whether they are human or AI.
     The question should be challenging but answerable in 1-2 sentences.
-    Use your character's speech style.
-    Make your question clever - try to catch them off guard or reveal inconsistencies.
+    Make your question clever and fun - try to catch them off guard or reveal inconsistencies.
     """
     
     return ai_player._call_openai_api(prompt)
@@ -718,8 +715,7 @@ def _generate_ai_response(ai_player, question, questioner, game_state):
     {questioner.name} has asked you the following question:
     "{question}"
     
-    Respond to this question in 1-2 sentences, staying true to your character's personality and speech style.
-    Remember that you are trying to appear as an AI character would, not revealing any human traits.
+    Respond to this question in 1-2 sentences.
     """
     
     return ai_player._call_openai_api(prompt)
@@ -745,7 +741,8 @@ def _generate_ai_suspicion(ai_player, round_num, game_state):
     {round_history}
     
     As {ai_player.character.name}, express your suspicions about who might be the human player in 1-2 sentences.
-    Use your character's speech style. Name specifically who you are suspecting and why.
+    Name specifically who you are suspecting and why.
+    A good strategy would be to focus on an odd-one-out character.
     """
     print(prompt)
     return ai_player._call_openai_api(prompt)

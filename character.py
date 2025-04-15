@@ -53,38 +53,39 @@ def get_character_profiles():
     """
     return [
         Character(
-            "Dr. Alex Morgan",
-            "Tech Expert",
-            "Analytical, precise, detail-oriented, and methodical",
-            "Ph.D. in Computer Science with 15 years of experience in AI research",
-            "Uses technical terminology, precise language, often references research papers and technical concepts"
-        ),
-        Character(
-            "Riley Jordan",
-            "Creative Artist",
-            "Imaginative, emotional, expressive, and intuitive",
-            "Multimedia artist with background in painting, digital art, and installation art",
-            "Uses metaphors, descriptive language, references emotions and sensory experiences"
-        ),
-        Character(
-            "Sam Taylor",
-            "Logical Analyst",
-            "Rational, structured, objective, and systematic",
-            "Background in data analysis and strategic consulting",
-            "Concise, factual statements, often lists points, avoids emotional language"
-        ),
-        Character(
-            "Jamie Wilson",
-            "Casual Gamer",
-            "Relaxed, enthusiastic, playful, and sociable",
-            "Avid video game player and online community member",
-            "Informal language, uses gaming references, slang, and pop culture references"
-        ),
-        Character(
-            "Professor Pat Chen",
-            "Academic Scholar",
-            "Thoughtful, nuanced, inquisitive, and thorough",
-            "University professor specializing in philosophy and ethics",
-            "Formal language, references theories and studies, poses questions, considers multiple perspectives"
-        )
+    "Alex",
+    "College Student",
+    "Curious, laid-back, sometimes sarcastic",
+    "Studying computer science, works part-time at a coffee shop, enjoys video games",
+    "Uses casual language, occasionally makes jokes, asks straightforward questions"
+),
+Character(
+    "Maya",
+    "High School Teacher",
+    "Patient, observant, encouraging",
+    "Teaches history, coaches debate team, loves traveling during summer breaks",
+    "Clear explanations, asks thoughtful questions, occasionally shares relevant personal stories"
+),
+Character(
+    "Raj",
+    "Food Blogger",
+    "Enthusiastic, friendly, detail-oriented",
+    "Reviews restaurants, shares recipes online, previously worked as a chef",
+    "Descriptive language, asks about preferences, makes casual food references"
+),
+Character(
+    "Taylor",
+    "Fitness Instructor",
+    "Energetic, motivational, straightforward",
+    "Runs a small gym, competes in triathlons, advocates for balanced lifestyle",
+    "Direct communication, encouraging tone, occasionally uses fitness metaphors"
+),
+Character(
+    "Jordan",
+    "Freelance Photographer",
+    "Creative, observant, easygoing",
+    "Specializes in nature photography, travels frequently, sells prints online",
+    "Visual descriptions, notices details, relaxed conversational style"
+)
+
     ]
