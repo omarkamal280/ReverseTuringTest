@@ -6,6 +6,7 @@ import time
 from character import get_character_profiles
 from questions import get_question_bank, select_game_questions
 from ai_player import AIPlayer
+from ai_judge import AIJudge
 
 class GameEngine:
     def __init__(self, interface=None, num_rounds=5):
@@ -23,6 +24,7 @@ class GameEngine:
         self.game_questions = []
         self.human_character = None
         self.ai_players = []
+        self.ai_judges = []
         self.current_round = 0
         self.use_gui = False
     
@@ -41,6 +43,13 @@ class GameEngine:
             for i, char in enumerate(self.characters):
                 if i != human_char_index:
                     self.ai_players.append(self.create_ai_player(char))
+            
+            # Create AI judges with different approaches
+            self.ai_judges = [
+                AIJudge("Holmes", "human_traits"),
+                AIJudge("Watson", "odd_one_out"),
+                AIJudge("Poirot", "mixed")
+            ]
             
             # Select questions for the game
             self.game_questions = self.select_game_questions()
@@ -110,23 +119,15 @@ class GameEngine:
         # Display all responses
         self.interface.display_responses(self.characters, round_num - 1)
         
-        # Show "analyzing" message for AI suspicions
-        print("\nAI characters are analyzing responses...")
+        # Show "analyzing" message for AI judges
+        print("\nAI judges are analyzing responses...")
         
-        # Get human suspicion
-        human_suspicion = self.interface.get_text_input(
-            f"As {self.human_character.name}, express your suspicions about who might be human (1-2 sentences):"
-        )
-        self.human_character.add_suspicion(human_suspicion)
-        
-        # Get AI suspicions
-        for ai_player in self.ai_players:
+        # Get AI judge suspicions
+        for judge in self.ai_judges:
             # Simulate thinking time
             time.sleep(random.uniform(1.0, 2.0))
-            ai_player.analyze_responses(self.characters, question, round_num)
-        
-        # Display all suspicions
-        self.interface.display_suspicions(self.characters, round_num - 1)
+            suspicion = judge.analyze_responses(self.characters, question, round_num)
+            print(f"Judge {judge.name}: {suspicion}")
     
     def run_voting_phase(self):
         """Run the final voting phase."""
@@ -134,45 +135,51 @@ class GameEngine:
         self.interface.clear_screen()
         self.interface.display_title()
         print("\nFinal Voting Phase")
-        print("\nBased on all the responses and suspicions, each player will now vote on who they think is the human.")
+        print("\nThe AI judges will now vote on who they think is the human player.")
         
-        # Get human vote
-        options = [char.name for char in self.characters if char != self.human_character]
-        print("\nAs the human player, you must vote for someone else to maintain your cover.")
+        # Get AI judge votes
+        print("\nAI judges are voting...")
+        judge_votes = {}
         
-        for i, name in enumerate(options, 1):
-            print(f"{i}. {name}")
-        
-        while True:
-            try:
-                choice = int(input("\nEnter your choice (number): "))
-                if 1 <= choice <= len(options):
-                    self.human_character.set_vote(options[choice - 1])
-                    break
-                print("Invalid choice. Please try again.")
-            except ValueError:
-                print("Please enter a number.")
-        
-        # Get AI votes
-        print("\nAI characters are voting...")
-        for ai_player in self.ai_players:
+        for judge in self.ai_judges:
             # Simulate thinking time
-            time.sleep(random.uniform(1.0, 1.5))
-            ai_player.generate_vote(self.characters)
+            time.sleep(random.uniform(1.0, 2.0))
+            vote = judge.generate_vote(self.characters, self.game_questions)
+            judge_votes[judge.name] = vote
+            print(f"Judge {judge.name} votes for: {vote}")
         
-        # Display votes and results
-        human_won = self.interface.display_votes(self.characters, self.human_character)
+        # Determine the majority vote
+        vote_counts = {}
+        for vote in judge_votes.values():
+            if vote in vote_counts:
+                vote_counts[vote] += 1
+            else:
+                vote_counts[vote] = 1
+        
+        majority_vote = max(vote_counts.items(), key=lambda x: x[1])[0]
+        
+        # Check if human player was identified
+        human_identified = (majority_vote == self.human_character.name)
+        
+        print(f"\nThe majority of judges voted for: {majority_vote}")
+        if human_identified:
+            print("\nThe judges have correctly identified you as the human player!")
+            print("Game over - you lose.")
+        else:
+            print("\nThe judges failed to identify you as the human player!")
+            print("Game over - you win!")
         
         # Display game over screen
-        self.interface.display_game_over(human_won)
+        self.interface.display_game_over(not human_identified)
         
-        return human_won
+        return not human_identified
         
     def reset(self):
         """Reset the game state for a new game."""
         self.game_questions = []
         self.human_character = None
         self.ai_players = []
+        self.ai_judges = []
         self.current_round = 0
         
         # Reset character states

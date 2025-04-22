@@ -122,8 +122,12 @@ Question that was asked: {question.text}
 Here are all the responses:
 {responses_text}
 
-As {self.character.name}, express your suspicions about who might be the human player in 1-2 sentences.
-Use your character's speech style. Don't directly accuse anyone yet, just share your thoughts naming who are you suspecting.
+As {self.character.name}, analyze the responses and identify which one seems different from the others.
+Look for patterns in how the AI characters respond, and identify which response breaks that pattern.
+Consider factors like response style, consistency with previous answers, and uniqueness compared to the group.
+
+Express your suspicions about who might be the human player in 1-2 sentences.
+Use your character's speech style. Name specifically who you are suspecting and why they stand out from the group.
 """
         
         print(f"\n=== STANDARD MODE SUSPICION PROMPT FOR {self.character.name} ===\n{prompt}\n===========\n")
@@ -153,7 +157,11 @@ Your goal is to identify the human based on their responses throughout the game.
 Here is the complete game history:
 {game_history}
 
-Based on all the responses and suspicions, which character do you think is the human player?
+Analyze all responses and suspicions to identify which character is the "odd one out" from the group.
+Look for patterns that most characters follow and identify who breaks these patterns.
+Focus on identifying differences in response style, consistency, and uniqueness compared to the group.
+
+Based on your analysis of who stands out from the group, which character do you think is the human player?
 Respond with just the character's name that you're voting for.
 """
     

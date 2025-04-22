@@ -14,7 +14,9 @@ const gameState = {
     currentQuestion: null,
     responses: {},
     suspicions: {},
+    judgeSuspicions: {},  // New: suspicions from AI judges in standard mode
     votes: {},
+    judgeVotes: {},       // New: votes from AI judges in standard mode
     gameOver: false,
     humanWon: null,
     // Interrogation mode specific
@@ -105,12 +107,24 @@ function createCharacterAvatar(name, size = 60) {
     return avatar;
 }
 
-function createMessageBubble(characterName, message, isSuspicion = false) {
+function createMessageBubble(characterName, message, isSuspicion = false, extraClass = '') {
     const bubble = document.createElement('div');
-    bubble.className = `message-bubble ${isSuspicion ? 'suspicion-bubble' : ''}`;
+    bubble.className = `message-bubble ${isSuspicion ? 'suspicion-bubble' : ''} ${extraClass}`;
     
-    // Create avatar
-    const avatar = createCharacterAvatar(characterName, 40);
+    // Check if this is a judge message
+    const isJudge = characterName.startsWith('Judge ');
+    
+    // Create avatar (different styling for judges)
+    let avatar;
+    if (isJudge) {
+        avatar = document.createElement('div');
+        avatar.className = 'avatar avatar-judge';
+        avatar.style.width = '40px';
+        avatar.style.height = '40px';
+        avatar.textContent = characterName.replace('Judge ', '').charAt(0);
+    } else {
+        avatar = createCharacterAvatar(characterName, 40);
+    }
     
     // Create message content
     const content = document.createElement('div');
@@ -308,6 +322,11 @@ async function submitSuspicion() {
         // Update game state
         gameState.suspicions = data.suspicions;
         
+        // Handle judge suspicions in standard mode
+        if (gameState.gameMode === 'standard' && data.judge_suspicions) {
+            gameState.judgeSuspicions = data.judge_suspicions;
+        }
+        
         // Display suspicions
         displaySuspicions();
         
@@ -365,10 +384,23 @@ async function submitVote(votedCharacterName) {
         const data = await response.json();
         
         // Update game state
-        gameState.votes = data.votes;
-        gameState.votedCharacter = data.voted_character;
         gameState.humanWon = data.human_won;
         gameState.gameOver = true;
+        gameState.votedCharacter = data.voted_character;
+        
+        // Handle different game modes
+        if (gameState.gameMode === 'standard') {
+            // Standard mode: Judge votes
+            if (data.judge_votes) {
+                gameState.judgeVotes = data.judge_votes;
+            }
+            if (data.vote_counts) {
+                gameState.voteCounts = data.vote_counts;
+            }
+        } else {
+            // Interrogation mode: Character votes
+            gameState.votes = data.votes;
+        }
         
         // Show results screen
         displayResults();
@@ -529,14 +561,47 @@ function displaySuspicions() {
     // Update round title
     document.getElementById('suspicions-round-title').textContent = `Round ${gameState.currentRound}/${gameState.totalRounds} - Suspicions`;
     
-    // Display suspicions
-    const suspicionsList = document.getElementById('suspicions-list');
-    suspicionsList.innerHTML = '';
-    
-    gameState.suspicions.forEach(suspicion => {
-        const bubble = createMessageBubble(suspicion.character_name, suspicion.suspicion, true);
-        suspicionsList.appendChild(bubble);
-    });
+    // Handle different display based on game mode
+    if (gameState.gameMode === 'standard') {
+        // Show standard mode suspicions container, hide interrogation mode container
+        document.getElementById('standard-mode-suspicions').classList.remove('d-none');
+        document.getElementById('interrogation-mode-suspicions').classList.add('d-none');
+        
+        // Display human suspicion
+        const humanSuspicionContainer = document.getElementById('human-suspicion');
+        humanSuspicionContainer.innerHTML = '';
+        
+        // Find the human suspicion in the suspicions array
+        const humanSuspicion = gameState.suspicions.find(s => s.character_name === gameState.humanCharacter.name);
+        if (humanSuspicion) {
+            const bubble = createMessageBubble(humanSuspicion.character_name, humanSuspicion.suspicion, true);
+            humanSuspicionContainer.appendChild(bubble);
+        }
+        
+        // Display judge suspicions
+        const judgeSuspicionsContainer = document.getElementById('judge-suspicions');
+        judgeSuspicionsContainer.innerHTML = '';
+        
+        if (gameState.judgeSuspicions && gameState.judgeSuspicions.length > 0) {
+            gameState.judgeSuspicions.forEach(judge => {
+                const bubble = createMessageBubble(`Judge ${judge.judge_name}`, judge.suspicion, true, 'judge-message');
+                judgeSuspicionsContainer.appendChild(bubble);
+            });
+        }
+    } else {
+        // Show interrogation mode suspicions container, hide standard mode container
+        document.getElementById('standard-mode-suspicions').classList.add('d-none');
+        document.getElementById('interrogation-mode-suspicions').classList.remove('d-none');
+        
+        // Display all character suspicions for interrogation mode
+        const suspicionsList = document.getElementById('suspicions-list');
+        suspicionsList.innerHTML = '';
+        
+        gameState.suspicions.forEach(suspicion => {
+            const bubble = createMessageBubble(suspicion.character_name, suspicion.suspicion, true);
+            suspicionsList.appendChild(bubble);
+        });
+    }
 }
 
 function displayVoting() {
@@ -578,47 +643,96 @@ function displayVoting() {
 }
 
 function displayResults() {
-    // Display votes
-    const votesList = document.getElementById('votes-list');
-    votesList.innerHTML = '';
-    
-    gameState.characters.forEach(character => {
-        if (character.vote) {
-            const li = document.createElement('li');
-            li.textContent = `${character.name} voted for: ${character.vote}`;
-            votesList.appendChild(li);
+    // Handle different display based on game mode
+    if (gameState.gameMode === 'standard') {
+        // Show standard mode results, hide interrogation mode results
+        document.getElementById('standard-mode-results').classList.remove('d-none');
+        document.getElementById('interrogation-mode-results').classList.add('d-none');
+        
+        // Display judge votes
+        const judgeVotesList = document.getElementById('judge-votes-list');
+        judgeVotesList.innerHTML = '';
+        
+        if (gameState.judgeVotes) {
+            Object.entries(gameState.judgeVotes).forEach(([judgeName, vote]) => {
+                const li = document.createElement('li');
+                li.textContent = `Judge ${judgeName} voted for: ${vote}`;
+                judgeVotesList.appendChild(li);
+            });
         }
-    });
-    
-    // Display vote tally
-    const voteTally = document.getElementById('vote-tally');
-    voteTally.innerHTML = '';
-    
-    Object.entries(gameState.votes).forEach(([name, voters]) => {
-        const li = document.createElement('li');
-        li.textContent = `${name}: ${voters.length} vote(s)`;
-        voteTally.appendChild(li);
-    });
-    
-    // Display result announcement
-    const resultAnnouncement = document.getElementById('result-announcement');
-    resultAnnouncement.innerHTML = '';
-    
-    const resultHeader = document.createElement('h3');
-    resultHeader.textContent = `The group has voted that ${gameState.votedCharacter} is the human!`;
-    
-    const resultMessage = document.createElement('p');
-    
-    if (gameState.humanWon) {
-        resultAnnouncement.className = 'result-announcement win-message';
-        resultMessage.textContent = `Congratulations! You successfully disguised yourself as an AI. The AI players thought ${gameState.votedCharacter} was the human, but it was actually you, ${gameState.humanCharacter.name}!`;
+        
+        // Display judge vote tally
+        const judgeVoteTally = document.getElementById('judge-vote-tally');
+        judgeVoteTally.innerHTML = '';
+        
+        if (gameState.voteCounts) {
+            Object.entries(gameState.voteCounts).forEach(([name, count]) => {
+                const li = document.createElement('li');
+                li.textContent = `${name}: ${count} vote(s)`;
+                judgeVoteTally.appendChild(li);
+            });
+        }
+        
+        // Display result announcement
+        const resultAnnouncement = document.getElementById('judge-result-announcement');
+        resultAnnouncement.innerHTML = '';
+        
+        const announcement = document.createElement('p');
+        announcement.className = 'result-text';
+        
+        if (gameState.humanWon) {
+            announcement.className += ' success';
+            announcement.textContent = `Congratulations! You successfully disguised yourself as an AI. The judges thought ${gameState.votedCharacter} was the human, but it was actually you, ${gameState.humanCharacter.name}!`;
+        } else {
+            announcement.className += ' failure';
+            announcement.textContent = `You've been discovered! The judges correctly identified you as the human.`;
+        }
+        
+        resultAnnouncement.appendChild(announcement);
     } else {
-        resultAnnouncement.className = 'result-announcement lose-message';
-        resultMessage.textContent = `You've been discovered! The AI players correctly identified you as the human.`;
+        // Show interrogation mode results, hide standard mode results
+        document.getElementById('standard-mode-results').classList.add('d-none');
+        document.getElementById('interrogation-mode-results').classList.remove('d-none');
+        
+        // Display character votes
+        const votesList = document.getElementById('votes-list');
+        votesList.innerHTML = '';
+        
+        gameState.characters.forEach(character => {
+            if (character.vote) {
+                const li = document.createElement('li');
+                li.textContent = `${character.name} voted for: ${character.vote}`;
+                votesList.appendChild(li);
+            }
+        });
+        
+        // Display vote tally
+        const voteTally = document.getElementById('vote-tally');
+        voteTally.innerHTML = '';
+        
+        Object.entries(gameState.votes).forEach(([name, voters]) => {
+            const li = document.createElement('li');
+            li.textContent = `${name}: ${voters.length} vote(s)`;
+            voteTally.appendChild(li);
+        });
+        
+        // Display result announcement
+        const resultAnnouncement = document.getElementById('result-announcement');
+        resultAnnouncement.innerHTML = '';
+        
+        const announcement = document.createElement('p');
+        announcement.className = 'result-text';
+        
+        if (gameState.humanWon) {
+            announcement.className += ' success';
+            announcement.textContent = `Congratulations! You successfully disguised yourself as an AI. The group thought ${gameState.votedCharacter} was the human, but it was actually you, ${gameState.humanCharacter.name}!`;
+        } else {
+            announcement.className += ' failure';
+            announcement.textContent = `You've been discovered! The group correctly identified you as the human.`;
+        }
+        
+        resultAnnouncement.appendChild(announcement);
     }
-    
-    resultAnnouncement.appendChild(resultHeader);
-    resultAnnouncement.appendChild(resultMessage);
 }
 
 // Interrogation Mode Functions

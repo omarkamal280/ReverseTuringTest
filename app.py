@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from character import get_character_profiles
 from questions import get_question_bank, select_game_questions
 from ai_player import AIPlayer
+from ai_judge import AIJudge
 
 # Load environment variables
 load_dotenv()
@@ -49,9 +50,12 @@ def start_game():
         'current_round': 0,
         'human_character': None,
         'ai_players': [],
+        'ai_judges': [],
         'game_mode': game_mode,
         'suspicions': {},
+        'judge_suspicions': {},
         'votes': {},
+        'judge_votes': {},
         'game_over': False,
         'human_won': None
     }
@@ -59,9 +63,16 @@ def start_game():
     # Add mode-specific data
     if game_mode == GAME_MODE_STANDARD:
         question_bank = get_question_bank()
-        game_questions = select_game_questions(question_bank, 5)
+        game_questions = select_game_questions(question_bank, 2)
         game_state['game_questions'] = game_questions
         game_state['responses'] = {}
+        
+        # Create AI judges with different approaches
+        game_state['ai_judges'] = [
+            {'name': 'Holmes', 'approach': 'human_traits', 'object': AIJudge('Holmes', 'human_traits')},
+            {'name': 'Watson', 'approach': 'odd_one_out', 'object': AIJudge('Watson', 'odd_one_out')},
+            {'name': 'Poirot', 'approach': 'mixed', 'object': AIJudge('Poirot', 'mixed')}
+        ]
     elif game_mode == GAME_MODE_INTERROGATION:
         game_state['introductions'] = {}
         game_state['interrogations'] = {}
@@ -201,24 +212,36 @@ def submit_suspicion():
     human_character = game_state['human_character']
     human_character.add_suspicion(suspicion)
     
-    # Generate AI suspicions
+    # In standard mode, AI players don't generate suspicions anymore - only judges do
     current_question = game_state['game_questions'][current_round - 1]
-    for ai_player in game_state['ai_players']:
-        ai_player.analyze_responses(
+    
+    # Generate AI judge suspicions
+    judge_suspicions = []
+    if current_round not in game_state['judge_suspicions']:
+        game_state['judge_suspicions'][current_round] = []
+    
+    for judge_data in game_state['ai_judges']:
+        judge = judge_data['object']
+        suspicion = judge.analyze_responses(
             game_state['characters'],
             current_question,
             current_round
         )
+        judge_suspicions.append({
+            'judge_name': judge.name,
+            'approach': judge_data['approach'],
+            'suspicion': suspicion
+        })
+        game_state['judge_suspicions'][current_round].append({
+            'judge_name': judge.name,
+            'suspicion': suspicion
+        })
     
-    # Collect all suspicions
-    all_suspicions = []
-    for character in game_state['characters']:
-        # Check if the character has a suspicion for the current round
-        if character.suspicions and len(character.suspicions) >= current_round:
-            all_suspicions.append({
-                'character_name': character.name,
-                'suspicion': character.suspicions[current_round - 1]
-            })
+    # Collect human suspicion only
+    all_suspicions = [{
+        'character_name': game_state['human_character'].name,
+        'suspicion': suspicion
+    }]
     
     # Determine if we should move to the next round or to voting
     next_action = 'next_round'
@@ -238,6 +261,7 @@ def submit_suspicion():
     return jsonify({
         'round': current_round,
         'suspicions': all_suspicions,
+        'judge_suspicions': judge_suspicions,
         'next_action': next_action,
         'next_round': next_round if next_action == 'next_round' else None,
         'next_question': next_question
@@ -258,42 +282,87 @@ def submit_vote():
     
     game_state = game_states[game_id]
     
-    # Save human vote
-    human_character = game_state['human_character']
-    human_character.set_vote(vote)
-    
-    # Generate AI votes
-    for ai_player in game_state['ai_players']:
-        ai_player.generate_vote(game_state['characters'])
-    
-    # Collect all votes
-    all_votes = {}
-    for character in game_state['characters']:
-        if character.vote:
-            if character.vote not in all_votes:
-                all_votes[character.vote] = []
-            all_votes[character.vote].append(character.name)
-    
-    # Determine the character with the most votes
-    most_votes = 0
-    voted_character = None
-    
-    for name, voters in all_votes.items():
-        if len(voters) > most_votes:
-            most_votes = len(voters)
-            voted_character = name
-    
-    # Determine if human won or lost
-    human_won = (voted_character != human_character.name)
-    game_state['human_won'] = human_won
-    game_state['game_over'] = True
-    
-    return jsonify({
-        'votes': {name: voters for name, voters in all_votes.items()},
-        'voted_character': voted_character,
-        'human_character': human_character.name,
-        'human_won': human_won
-    })
+    # Different voting logic based on game mode
+    if game_state['game_mode'] == GAME_MODE_STANDARD:
+        # In standard mode, only judges vote (not AI players)
+        # Save human vote for compatibility, but it won't be used in determining the winner
+        human_character = game_state['human_character']
+        human_character.set_vote(vote)
+        
+        # Generate AI judge votes
+        judge_votes = {}
+        for judge_data in game_state['ai_judges']:
+            judge = judge_data['object']
+            vote = judge.generate_vote(game_state['characters'], game_state['game_questions'])
+            judge_votes[judge.name] = vote
+        
+        # Store judge votes in game state
+        game_state['judge_votes'] = judge_votes
+        
+        # Determine the majority vote
+        vote_counts = {}
+        for vote in judge_votes.values():
+            if vote not in vote_counts:
+                vote_counts[vote] = 0
+            vote_counts[vote] += 1
+        
+        most_votes = 0
+        voted_character = None
+        for name, count in vote_counts.items():
+            if count > most_votes:
+                most_votes = count
+                voted_character = name
+        
+        # Determine if human won or lost
+        human_won = (voted_character != human_character.name)
+        game_state['human_won'] = human_won
+        game_state['game_over'] = True
+        
+        return jsonify({
+            'judge_votes': judge_votes,
+            'vote_counts': vote_counts,
+            'voted_character': voted_character,
+            'human_character': human_character.name,
+            'human_won': human_won
+        })
+    else:  # GAME_MODE_INTERROGATION
+        # Original voting logic for interrogation mode
+        # Save human vote
+        human_character = game_state['human_character']
+        human_character.set_vote(vote)
+        
+        # Generate AI votes
+        for ai_player in game_state['ai_players']:
+            ai_player.generate_vote(game_state['characters'])
+        
+        # Collect all votes
+        all_votes = {}
+        for character in game_state['characters']:
+            if character.vote:
+                if character.vote not in all_votes:
+                    all_votes[character.vote] = []
+                all_votes[character.vote].append(character.name)
+        
+        # Determine the character with the most votes
+        most_votes = 0
+        voted_character = None
+        
+        for name, voters in all_votes.items():
+            if len(voters) > most_votes:
+                most_votes = len(voters)
+                voted_character = name
+        
+        # Determine if human won or lost
+        human_won = (voted_character != human_character.name)
+        game_state['human_won'] = human_won
+        game_state['game_over'] = True
+        
+        return jsonify({
+            'votes': {name: voters for name, voters in all_votes.items()},
+            'voted_character': voted_character,
+            'human_character': human_character.name,
+            'human_won': human_won
+        })
 
 @app.route('/api/reset_game', methods=['POST'])
 def reset_game():
@@ -661,7 +730,12 @@ def _choose_ai_interrogation_target(ai_player, available_targets, game_state):
     
     You can interrogate one of these characters: {', '.join(available_targets)}
     
-    Which character do you want to interrogate? Choose the one you find most suspicious or has odd behavior to the rest.
+    Which character do you want to interrogate? 
+    
+    Focus on identifying the "odd one out" from the group based on previous interactions.
+    Look for patterns in how most characters respond, and identify which character breaks that pattern.
+    Consider factors like response style, consistency, and uniqueness compared to the group.
+    
     Respond with ONLY the character's name.
     """
     
@@ -692,15 +766,15 @@ def _generate_ai_question(ai_player, target_character, round_num, game_state):
     
     {ai_player.character.get_prompt_description()}
     
-    You want to determine if {target_character.name} is a human or AI.
+    You want to determine if {target_character.name} is the human or an AI.
     
     
     Previous interactions with {target_character.name}:
     {history}
     
-    Generate ONE specific question to ask {target_character.name} that might reveal whether they are human or AI.
+    Generate ONE specific question to ask {target_character.name} that might reveal whether they are the human or AI.
     The question should be challenging but answerable in 1-2 sentences.
-    Make your question clever and fun - try to catch them off guard or reveal inconsistencies.
+    Make your question clever and designed to reveal if they break the pattern of the AI group.
     """
     
     return ai_player._call_openai_api(prompt)
@@ -740,9 +814,12 @@ def _generate_ai_suspicion(ai_player, round_num, game_state):
     Interrogations from this round:
     {round_history}
     
-    As {ai_player.character.name}, express your suspicions about who might be the human player in 1-2 sentences.
-    Name specifically who you are suspecting and why.
-    A good strategy would be to focus on an odd-one-out character.
+    As {ai_player.character.name}, analyze the interactions and identify which character seems different from the others. This is likely the human.
+        Look for patterns in how most characters respond, and identify which character breaks that pattern.
+        Consider factors like response style, consistency with previous answers, and uniqueness compared to the group.
+        
+        Express your suspicions about who might be the human player in 1-2 sentences.
+        Use your character's speech style. Name specifically who you are suspecting and why they stand out from the group.
     """
     print(prompt)
     return ai_player._call_openai_api(prompt)

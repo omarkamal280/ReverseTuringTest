@@ -157,6 +157,8 @@ class TerminalInterface:
         Returns:
             bool: True if human won, False if human lost
         """
+        # This method is kept for compatibility with the interrogation mode
+        # Standard mode now uses judge votes which are displayed directly in run_voting_phase
         self.display_title()
         print(f"\n{Fore.YELLOW}Final Votes:{Style.RESET_ALL}\n")
         
@@ -192,6 +194,15 @@ class TerminalInterface:
             print(f"\n{Fore.RED}You've been discovered! The AI players correctly identified you as the human.{Style.RESET_ALL}")
         
         return human_won
+        
+    def display_judge_analysis(self, judge_name, suspicion):
+        """Display a judge's analysis of the responses.
+        
+        Args:
+            judge_name (str): Name of the judge
+            suspicion (str): Judge's suspicion statement
+        """
+        print(f"\n{Fore.MAGENTA}Judge {judge_name}:{Style.RESET_ALL} \"{suspicion}\"")
     
     def display_game_over(self, human_won):
         """
@@ -205,10 +216,16 @@ class TerminalInterface:
         
         if human_won:
             print(f"\n{Fore.GREEN}GAME OVER - YOU WIN!{Style.RESET_ALL}")
-            print("\nYou successfully disguised yourself as an AI and fooled the other players.")
+            if self.game_mode == "standard":
+                print("\nYou successfully disguised yourself as an AI and fooled the judges.")
+            else:
+                print("\nYou successfully disguised yourself as an AI and fooled the other players.")
         else:
             print(f"\n{Fore.RED}GAME OVER - YOU LOSE!{Style.RESET_ALL}")
-            print("\nThe AI players saw through your disguise and identified you as the human.")
+            if self.game_mode == "standard":
+                print("\nThe judges saw through your disguise and identified you as the human.")
+            else:
+                print("\nThe AI players saw through your disguise and identified you as the human.")
         
         print("\nThanks for playing the Reverse Turing Test!")
         input("\nPress Enter to exit...")

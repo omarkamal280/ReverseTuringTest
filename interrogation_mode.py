@@ -330,7 +330,12 @@ class InterrogationGameEngine:
         
         You can interrogate one of these characters: {', '.join(target_names)}
         
-        Which character do you want to interrogate? Choose the one you find most suspicious or want to learn more about.
+        Which character do you want to interrogate? 
+        
+        There is only one human so focus on identifying the "odd one out" from the group based on previous interactions.
+        Look for patterns in how most characters respond, and identify which character breaks that pattern.
+        Consider factors like response style, consistency, and uniqueness compared to the group.
+        
         Respond with ONLY the character's name.
         """
     
@@ -351,7 +356,7 @@ class InterrogationGameEngine:
         
         {ai_player.character.get_prompt_description()}
         
-        You want to determine if {target.name} is a human or AI.
+        You want to determine if {target.name} is the human or an AI.
         
         About {target.name}:
         {target.get_prompt_description()}
@@ -359,10 +364,10 @@ class InterrogationGameEngine:
         Previous interactions with {target.name}:
         {history}
         
-        Generate ONE specific question to ask {target.name} that might reveal whether they are human or AI.
+        Generate ONE specific question to ask {target.name} that might reveal whether they are the human or an AI.
         The question should be challenging but answerable in 1-2 sentences.
         Use your character's speech style.
-        Make your question clever - try to catch them off guard or reveal inconsistencies.
+        Make your question clever and designed to reveal if they break the pattern of the AI group.
         """
         
         return ai_player._call_openai_api(prompt)
@@ -403,8 +408,12 @@ class InterrogationGameEngine:
         Interrogations from this round:
         {round_history}
         
-        As {ai_player.character.name}, express your suspicions about who might be the human player in 1-2 sentences.
-        Use your character's speech style. Name specifically who you are suspecting and why.
+        As {ai_player.character.name}, analyze the interactions and identify which character seems different from the others. This is likely the human.
+        Look for patterns in how most characters respond, and identify which character breaks that pattern.
+        Consider factors like response style, consistency with previous answers, and uniqueness compared to the group.
+        
+        Express your suspicions about who might be the human player in 1-2 sentences.
+        Use your character's speech style. Name specifically who you are suspecting and why they stand out from the group.
         """
         
         return ai_player._call_openai_api(prompt)
@@ -443,7 +452,11 @@ class InterrogationGameEngine:
         SUSPICIONS:
         {suspicion_history}
         
-        Based on all the interrogations and suspicions, which character do you think is the human player?
+        Analyze all interactions and suspicions to identify which character is the "odd one out" from the group. This is likely the human.
+        Look for patterns that most characters follow and identify who breaks these patterns.
+        Focus on identifying differences in response style, consistency, and uniqueness compared to the group.
+        
+        Based on your analysis of who stands out from the group, which character do you think is the human player?
         Respond with just the character's name that you're voting for.
         """
         

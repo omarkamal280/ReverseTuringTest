@@ -103,9 +103,26 @@
                     </div>
                 </div>
                 <div id="suspicions-list-container" class="d-none">
-                    <div id="suspicions-list" class="suspicions-list mt-4">
-                        <!-- Suspicion bubbles will be inserted here -->
+                    <!-- Standard mode: Show only human suspicion and judge analyses -->
+                    <div id="standard-mode-suspicions" class="d-none">
+                        <h3 class="mt-4">Your Suspicion:</h3>
+                        <div id="human-suspicion" class="suspicions-list mt-2">
+                            <!-- Human suspicion bubble will be inserted here -->
+                        </div>
+                        
+                        <h3 class="mt-4">Judge Analyses:</h3>
+                        <div id="judge-suspicions" class="suspicions-list mt-2">
+                            <!-- Judge suspicion bubbles will be inserted here -->
+                        </div>
                     </div>
+                    
+                    <!-- Interrogation mode: Show all character suspicions -->
+                    <div id="interrogation-mode-suspicions" class="d-none">
+                        <div id="suspicions-list" class="suspicions-list mt-4">
+                            <!-- Character suspicion bubbles will be inserted here -->
+                        </div>
+                    </div>
+                    
                     <div class="text-center mt-4">
                         <button id="continue-button" class="btn btn-primary">Continue</button>
                     </div>
@@ -135,7 +152,23 @@
                 <div class="round-info text-center">
                     <h2>Voting Results</h2>
                 </div>
-                <div class="results-container mt-4">
+                <!-- Standard mode results -->
+                <div id="standard-mode-results" class="results-container mt-4 d-none">
+                    <h3>Judge Votes:</h3>
+                    <ul id="judge-votes-list" class="votes-list">
+                        <!-- Judge votes will be inserted here -->
+                    </ul>
+                    <h3 class="mt-4">Vote Tally:</h3>
+                    <ul id="judge-vote-tally" class="vote-tally">
+                        <!-- Judge vote tally will be inserted here -->
+                    </ul>
+                    <div id="judge-result-announcement" class="result-announcement mt-4">
+                        <!-- Judge result announcement will be inserted here -->
+                    </div>
+                </div>
+                
+                <!-- Interrogation mode results -->
+                <div id="interrogation-mode-results" class="results-container mt-4 d-none">
                     <h3>Each player's vote:</h3>
                     <ul id="votes-list" class="votes-list">
                         <!-- Votes will be inserted here -->
