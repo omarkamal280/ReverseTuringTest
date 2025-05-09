@@ -130,38 +130,48 @@ class GameEngine:
             print(f"Judge {judge.name}: {suspicion}")
     
     def run_voting_phase(self):
-        """Run the final voting phase."""
-        # Display voting instructions
-        self.interface.clear_screen()
-        self.interface.display_title()
-        print("\nFinal Voting Phase")
-        print("\nThe AI judges will now vote on who they think is the human player.")
+        """Run the voting phase of the game."""
+        print("\n===== VOTING PHASE =====\n")
+        print("The judges are now discussing and voting on who they think is the human player...")
         
-        # Get AI judge votes
-        print("\nAI judges are voting...")
+        # Initial votes from AI judges
         judge_votes = {}
-        
         for judge in self.ai_judges:
-            # Simulate thinking time
-            time.sleep(random.uniform(1.0, 2.0))
             vote = judge.generate_vote(self.characters, self.game_questions)
             judge_votes[judge.name] = vote
-            print(f"Judge {judge.name} votes for: {vote}")
+            print(f"Judge {judge.name}'s initial vote: {vote}")
         
-        # Determine the majority vote
-        vote_counts = {}
-        for vote in judge_votes.values():
-            if vote in vote_counts:
-                vote_counts[vote] += 1
-            else:
-                vote_counts[vote] = 1
+        # Have judges discuss and try to reach consensus
+        print("\n===== JUDGES' DISCUSSION =====\n")
+        main_judge = self.ai_judges[0]  # Use the first judge to lead the discussion
+        other_judges = self.ai_judges[1:]
         
-        majority_vote = max(vote_counts.items(), key=lambda x: x[1])[0]
+        final_verdict, discussion_history = main_judge.discuss(
+            other_judges, self.characters, self.game_questions
+        )
+        
+        # Display the discussion
+        for round_idx, round_messages in enumerate(discussion_history):
+            print(f"\n--- DISCUSSION ROUND {round_idx + 1} ---")
+            for message in round_messages:
+                print(f"{message['judge']}: {message['message']}")
+        
+        # Get final votes after discussion
+        final_judge_votes = {}
+        for judge in self.ai_judges:
+            # Check if the judge's vote changed during discussion
+            if judge.name in judge_votes and judge_votes[judge.name] != final_verdict:
+                print(f"Judge {judge.name} changed their vote from {judge_votes[judge.name]} to {final_verdict}")
+            final_judge_votes[judge.name] = final_verdict
+        
+        # Store the discussion history and final votes
+        self.judge_discussion = discussion_history
+        self.final_judge_votes = final_judge_votes
         
         # Check if human player was identified
-        human_identified = (majority_vote == self.human_character.name)
+        human_identified = (final_verdict == self.human_character.name)
         
-        print(f"\nThe majority of judges voted for: {majority_vote}")
+        print(f"\nAfter discussion, the judges have reached a verdict: {final_verdict}")
         if human_identified:
             print("\nThe judges have correctly identified you as the human player!")
             print("Game over - you lose.")

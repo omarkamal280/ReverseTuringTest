@@ -282,6 +282,7 @@ body {
 
 .judge-message {
     border-left: 4px solid #ffcc00;
+    margin-bottom: 0.8rem;
 }
 
 #judge-suspicions .message-bubble {
@@ -291,6 +292,44 @@ body {
 #judge-suspicions .message-sender {
     color: #333333;
     font-weight: bold;
+}
+
+.discussion-container {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border: 2px solid #ffcc00;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.discussion-container h4 {
+    color: #333333;
+    border-bottom: 2px solid #ffcc00;
+    padding-bottom: 0.75rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    font-size: 1.3rem;
+    font-weight: bold;
+}
+
+.discussion-container .message-bubble {
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1rem;
+    border-left: 4px solid #ffcc00;
+}
+
+.discussion-container .message-sender {
+    font-weight: bold;
+    color: #333333;
+    font-size: 1.1rem;
+}
+
+.judge-message {
+    border-left: 4px solid #ffcc00;
+    margin-bottom: 1rem;
+    background-color: #fffdf0;
 }
 
 .result-text.success {

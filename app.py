@@ -208,9 +208,11 @@ def submit_suspicion():
     if current_round < 1 or current_round > len(game_state['game_questions']):
         return jsonify({'error': 'Invalid round'}), 400
     
-    # Save human suspicion
+    # In standard mode, human players don't need to provide suspicions
+    # Only save suspicion if in interrogation mode
     human_character = game_state['human_character']
-    human_character.add_suspicion(suspicion)
+    if game_state['game_mode'] == GAME_MODE_INTERROGATION:
+        human_character.add_suspicion(suspicion)
     
     # In standard mode, AI players don't generate suspicions anymore - only judges do
     current_question = game_state['game_questions'][current_round - 1]
@@ -237,11 +239,15 @@ def submit_suspicion():
             'suspicion': suspicion
         })
     
-    # Collect human suspicion only
-    all_suspicions = [{
-        'character_name': game_state['human_character'].name,
-        'suspicion': suspicion
-    }]
+    # In standard mode, we don't need human suspicions
+    if game_state['game_mode'] == GAME_MODE_STANDARD:
+        all_suspicions = []
+    else:
+        # In interrogation mode, collect human suspicion
+        all_suspicions = [{
+            'character_name': game_state['human_character'].name,
+            'suspicion': suspicion
+        }]
     
     # Determine if we should move to the next round or to voting
     next_action = 'next_round'
@@ -277,51 +283,58 @@ def submit_vote():
     if not game_id or game_id not in game_states:
         return jsonify({'error': 'Invalid game ID'}), 400
     
-    if not vote:
+    # In standard mode, we allow empty votes since the human player doesn't need to vote
+    if not vote and game_id in game_states and game_states[game_id]['game_mode'] != GAME_MODE_STANDARD:
         return jsonify({'error': 'Vote cannot be empty'}), 400
     
     game_state = game_states[game_id]
     
     # Different voting logic based on game mode
     if game_state['game_mode'] == GAME_MODE_STANDARD:
-        # In standard mode, only judges vote (not AI players)
-        # Save human vote for compatibility, but it won't be used in determining the winner
+        # In standard mode, judges vote on who they think is the human
         human_character = game_state['human_character']
-        human_character.set_vote(vote)
         
-        # Generate AI judge votes
+        # Generate initial votes from AI judges
         judge_votes = {}
-        for judge_data in game_state['ai_judges']:
-            judge = judge_data['object']
-            vote = judge.generate_vote(game_state['characters'], game_state['game_questions'])
-            judge_votes[judge.name] = vote
+        for judge in game_state['ai_judges']:
+            vote = judge['object'].generate_vote(game_state['characters'], game_state['game_questions'])
+            judge_votes[judge['name']] = vote
         
-        # Store judge votes in game state
-        game_state['judge_votes'] = judge_votes
+        # Have judges discuss and try to reach consensus
+        main_judge = game_state['ai_judges'][0]['object']  # Use the first judge to lead the discussion
+        other_judges = [judge['object'] for judge in game_state['ai_judges'][1:]]
         
-        # Determine the majority vote
-        vote_counts = {}
-        for vote in judge_votes.values():
-            if vote not in vote_counts:
-                vote_counts[vote] = 0
-            vote_counts[vote] += 1
+        final_verdict, discussion_history = main_judge.discuss(
+            other_judges, game_state['characters'], game_state['game_questions']
+        )
         
-        most_votes = 0
-        voted_character = None
-        for name, count in vote_counts.items():
-            if count > most_votes:
-                most_votes = count
-                voted_character = name
+        # Get final votes after discussion
+        final_judge_votes = {}
+        for judge in game_state['ai_judges']:
+            final_judge_votes[judge['name']] = final_verdict
+        
+        # Store the discussion history and final votes
+        game_state['judge_discussion'] = discussion_history
+        game_state['final_judge_votes'] = final_judge_votes
+        
+        # Debug logging
+        print("\n=== DEBUG: JUDGE DISCUSSION DATA ===")
+        print(f"Discussion history length: {len(discussion_history)}")
+        for i, round_data in enumerate(discussion_history):
+            print(f"Round {i+1} messages: {len(round_data)}")
+            for msg in round_data:
+                print(f"  Judge {msg['judge']}: {msg['message'][:50]}...")
         
         # Determine if human won or lost
-        human_won = (voted_character != human_character.name)
+        human_won = (final_verdict != human_character.name)
         game_state['human_won'] = human_won
         game_state['game_over'] = True
         
         return jsonify({
-            'judge_votes': judge_votes,
-            'vote_counts': vote_counts,
-            'voted_character': voted_character,
+            'initial_judge_votes': judge_votes,
+            'judge_votes': final_judge_votes,
+            'judge_discussion': discussion_history,
+            'voted_character': final_verdict,
             'human_character': human_character.name,
             'human_won': human_won
         })

@@ -16,7 +16,9 @@ const gameState = {
     suspicions: {},
     judgeSuspicions: {},  // New: suspicions from AI judges in standard mode
     votes: {},
-    judgeVotes: {},       // New: votes from AI judges in standard mode
+    initialJudgeVotes: {}, // Initial votes from judges before discussion
+    judgeVotes: {},       // Final votes from AI judges after discussion
+    judgeDiscussion: [],  // Discussion between judges
     gameOver: false,
     humanWon: null,
     // Interrogation mode specific
@@ -332,12 +334,21 @@ async function submitSuspicion() {
         
         // Check next action
         if (data.next_action === 'voting') {
-            // Prepare for voting
-            document.getElementById('continue-button').textContent = 'Continue to Voting';
-            document.getElementById('continue-button').onclick = () => {
-                displayVoting();
-                showScreen('voting');
-            };
+            // In standard mode, we automatically proceed to the voting phase without human input
+            if (gameState.gameMode === 'standard') {
+                // Automatically trigger the voting phase
+                document.getElementById('continue-button').textContent = 'Continue to Results';
+                document.getElementById('continue-button').onclick = async () => {
+                    await autoSubmitVote();
+                };
+            } else {
+                // In interrogation mode, prepare for voting as usual
+                document.getElementById('continue-button').textContent = 'Continue to Voting';
+                document.getElementById('continue-button').onclick = () => {
+                    displayVoting();
+                    showScreen('voting');
+                };
+            }
         } else {
             // Prepare for next round
             gameState.currentRound = data.next_round;
@@ -359,6 +370,68 @@ async function submitSuspicion() {
         console.error('Error submitting suspicion:', error);
         hideLoading();
         alert('Failed to submit suspicion. Please try again.');
+    }
+}
+
+async function autoSubmitVote() {
+    try {
+        showLoading('Judges are discussing and voting...');
+        
+        // In standard mode, we don't need a specific vote from the human player
+        // Just submit an empty vote to trigger the judge voting process
+        const response = await fetch('/api/submit_vote', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                vote: ''
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to submit vote');
+        }
+        
+        const data = await response.json();
+        
+        // Update game state
+        gameState.humanWon = data.human_won;
+        gameState.gameOver = true;
+        gameState.votedCharacter = data.voted_character;
+        
+        // Handle judge votes and discussion
+        console.log('Response data from server:', data);
+        
+        if (data.initial_judge_votes) {
+            gameState.initialJudgeVotes = data.initial_judge_votes;
+            console.log('Initial judge votes:', data.initial_judge_votes);
+        }
+        if (data.judge_votes) {
+            gameState.judgeVotes = data.judge_votes;
+            console.log('Final judge votes:', data.judge_votes);
+        }
+        if (data.vote_counts) {
+            gameState.voteCounts = data.vote_counts;
+            console.log('Vote counts:', data.vote_counts);
+        }
+        if (data.judge_discussion) {
+            console.log('Judge discussion from server:', data.judge_discussion);
+            gameState.judgeDiscussion = data.judge_discussion;
+        } else {
+            console.warn('No judge discussion data received from server');
+        }
+        
+        // Show results screen
+        displayResults();
+        
+        hideLoading();
+        showScreen('results');
+    } catch (error) {
+        console.error('Error during judge voting:', error);
+        hideLoading();
+        alert('Failed to complete the voting process. Please try again.');
     }
 }
 
@@ -390,12 +463,18 @@ async function submitVote(votedCharacterName) {
         
         // Handle different game modes
         if (gameState.gameMode === 'standard') {
-            // Standard mode: Judge votes
+            // Standard mode: Judge votes and discussion
+            if (data.initial_judge_votes) {
+                gameState.initialJudgeVotes = data.initial_judge_votes;
+            }
             if (data.judge_votes) {
                 gameState.judgeVotes = data.judge_votes;
             }
             if (data.vote_counts) {
                 gameState.voteCounts = data.vote_counts;
+            }
+            if (data.judge_discussion) {
+                gameState.judgeDiscussion = data.judge_discussion;
             }
         } else {
             // Interrogation mode: Character votes
@@ -433,6 +512,7 @@ async function resetGame() {
         // Reset game state
         Object.assign(gameState, {
             gameId: null,
+            gameMode: 'standard',
             characters: [],
             selectedCharacterIndex: null,
             humanCharacter: null,
@@ -441,9 +521,20 @@ async function resetGame() {
             currentQuestion: null,
             responses: {},
             suspicions: {},
+            judgeSuspicions: {},
             votes: {},
+            initialJudgeVotes: {},
+            judgeVotes: {},
+            judgeDiscussion: [],
             gameOver: false,
-            humanWon: null
+            humanWon: null,
+            // Reset interrogation mode properties
+            introductions: [],
+            interrogations: {},
+            interrogationOrder: [],
+            currentInterrogator: null,
+            currentTarget: null,
+            currentInterrogationQuestion: null
         });
         
         // Start a new game
@@ -567,16 +658,15 @@ function displaySuspicions() {
         document.getElementById('standard-mode-suspicions').classList.remove('d-none');
         document.getElementById('interrogation-mode-suspicions').classList.add('d-none');
         
-        // Display human suspicion
+        // In standard mode, we don't need human suspicions
+        // Hide human suspicion container
         const humanSuspicionContainer = document.getElementById('human-suspicion');
         humanSuspicionContainer.innerHTML = '';
+        humanSuspicionContainer.classList.add('d-none');
         
-        // Find the human suspicion in the suspicions array
-        const humanSuspicion = gameState.suspicions.find(s => s.character_name === gameState.humanCharacter.name);
-        if (humanSuspicion) {
-            const bubble = createMessageBubble(humanSuspicion.character_name, humanSuspicion.suspicion, true);
-            humanSuspicionContainer.appendChild(bubble);
-        }
+        // Hide suspicion input container and show suspicions list directly
+        document.getElementById('suspicion-input-container').classList.add('d-none');
+        document.getElementById('suspicions-list-container').classList.remove('d-none');
         
         // Display judge suspicions
         const judgeSuspicionsContainer = document.getElementById('judge-suspicions');
@@ -648,6 +738,63 @@ function displayResults() {
         // Show standard mode results, hide interrogation mode results
         document.getElementById('standard-mode-results').classList.remove('d-none');
         document.getElementById('interrogation-mode-results').classList.add('d-none');
+        
+        // Display judge discussion
+        const judgeDiscussion = document.getElementById('judge-discussion');
+        judgeDiscussion.innerHTML = '';
+        
+        console.log('Judge Discussion Data:', gameState.judgeDiscussion);
+        
+        // Add a prominent header for the judge discussion section
+        const discussionHeader = document.createElement('div');
+        discussionHeader.className = 'text-center mb-3';
+        discussionHeader.innerHTML = '<h3 style="color: #333; font-weight: bold; border-bottom: 2px solid #ffcc00; padding-bottom: 10px;">Judges\'s Deliberation</h3>';
+        judgeDiscussion.appendChild(discussionHeader);
+        
+        if (gameState.judgeDiscussion && gameState.judgeDiscussion.length > 0) {
+            // Create a container for the discussion rounds
+            const discussionContainer = document.createElement('div');
+            discussionContainer.className = 'discussion-container';
+            
+            // Add each round of discussion
+            gameState.judgeDiscussion.forEach((round, roundIndex) => {
+                console.log(`Discussion Round ${roundIndex + 1}:`, round);
+                
+                // Create a round header
+                const roundHeader = document.createElement('h4');
+                roundHeader.textContent = `Discussion Round ${roundIndex + 1}`;
+                roundHeader.className = 'mt-3 mb-3';
+                discussionContainer.appendChild(roundHeader);
+                
+                // Create a round container
+                const roundContainer = document.createElement('div');
+                roundContainer.className = 'round-container';
+                
+                // Add each judge's message in this round
+                round.forEach(message => {
+                    console.log(`Judge ${message.judge} message:`, message.message);
+                    
+                    const bubble = createMessageBubble(
+                        `Judge ${message.judge}`, 
+                        message.message, 
+                        false, 
+                        'judge-message'
+                    );
+                    roundContainer.appendChild(bubble);
+                });
+                
+                discussionContainer.appendChild(roundContainer);
+            });
+            
+            judgeDiscussion.appendChild(discussionContainer);
+        } else {
+            // If no discussion, show a message
+            console.log('No judge discussion data found');
+            const noDiscussion = document.createElement('div');
+            noDiscussion.className = 'alert alert-warning';
+            noDiscussion.innerHTML = '<strong>Note:</strong> The judges made their decisions without discussion.';
+            judgeDiscussion.appendChild(noDiscussion);
+        }
         
         // Display judge votes
         const judgeVotesList = document.getElementById('judge-votes-list');
