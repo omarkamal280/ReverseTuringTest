@@ -323,7 +323,7 @@ def submit_vote():
         for i, round_data in enumerate(discussion_history):
             print(f"Round {i+1} messages: {len(round_data)}")
             for msg in round_data:
-                print(f"  Judge {msg['judge']}: {msg['message'][:50]}...")
+                print(f"  Judge {msg['judge']}: {msg['message']}")
         
         # Determine if human won or lost
         human_won = (final_verdict != human_character.name)

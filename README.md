@@ -2,13 +2,28 @@
 
 A game where a human player tries to disguise themselves as an AI while AI agents try to identify the human among them.
 
+![Game Screenshot](example.png)
+
 ## Game Concept
 - The human player selects one of 5 character profiles
 - 4 AI players assume the remaining character profiles
-- 5 rounds of questions are asked to all characters
-- After each round, all players express their suspicions
-- At the end, all players vote on who they think is the human
-- If the human is identified, they lose; if not, they win
+- AI judges analyze responses to identify the human
+- The human wins if they successfully disguise themselves as an AI; otherwise, they lose
+
+## Game Modes
+The game offers two distinct modes:
+
+1. **Standard Mode** (Default):
+   - 5 rounds of preset questions are asked to all characters
+   - AI judges analyze responses after each round
+   - Judges discuss their opinions and vote at the end
+   - Final verdict is determined by the judges' consensus
+
+2. **Interrogation Mode**:
+   - Characters take turns asking questions to each other
+   - Each character can select who they want to interrogate
+   - More dynamic gameplay with targeted questioning
+   - AI judges analyze the interrogation responses
 
 ## Setup
 1. Install the required dependencies:
@@ -23,14 +38,14 @@ OPENAI_API_KEY=your_api_key_here
 
 3. Run the game in one of the following modes:
 
-   **Terminal Mode**:
+   **Terminal Mode** (Standard):
    ```
    python main.py --terminal
    ```
 
-   **Pygame GUI Mode**:
+   **Terminal Mode** (Interrogation):
    ```
-   python main.py
+   python main.py --terminal --mode interrogation
    ```
 
    **Web Interface Mode**:
@@ -41,37 +56,37 @@ OPENAI_API_KEY=your_api_key_here
 
 ## Game Controls
 - Terminal Mode: Follow text prompts and type responses
-- Pygame GUI: Use the mouse to select options and navigate menus
 - Web Interface: Click buttons and use text inputs to interact
 
 ## Requirements
 - Python 3.8+
 - OpenAI API key
 - Flask (for web interface)
+- Internet connection (for OpenAI API access)
 
 ## Technical Implementation
 
 ### Project Structure
 ```
 gameProject/
-├── .env                # Environment variables (API keys)
-├── .gitignore          # Git ignore file
-├── README.md           # Project documentation
-├── app.py              # Flask application for web interface
-├── assets.py           # Asset management for Pygame interface
-├── ai_player.py        # AI player implementation
-├── character.py        # Character profiles and management
-├── game_engine.py      # Core game logic
-├── gui.py              # Pygame graphical interface
-├── human_interface.py  # Terminal interface
-├── main.py             # Entry point for terminal/Pygame modes
-├── questions.py        # Question bank and selection
-├── requirements.txt    # Project dependencies
-├── static/             # Static files for web interface
-│   ├── css/            # CSS stylesheets
-│   ├── js/             # JavaScript files
-│   └── images/         # Image assets
-└── templates/          # HTML templates for web interface
+├── .env                    # Environment variables (API keys)
+├── .gitignore              # Git ignore file
+├── README.md               # Project documentation
+├── app.py                  # Flask application for web interface
+├── ai_judge.py             # AI judge implementation
+├── ai_player.py            # AI player implementation
+├── character.py            # Character profiles and management
+├── game_engine.py          # Standard mode game logic
+├── human_interface.py      # Terminal interface
+├── interrogation_mode.py   # Interrogation mode game logic
+├── main.py                 # Entry point for all game modes
+├── questions.py            # Question bank and selection
+├── requirements.txt        # Project dependencies
+├── static/                 # Static files for web interface
+│   ├── css/                # CSS stylesheets
+│   ├── js/                 # JavaScript files
+│   └── images/             # Image assets
+└── templates/              # HTML templates for web interface
 ```
 
 ### Core Components
@@ -92,11 +107,23 @@ gameProject/
 - Analyzes all responses to identify potential human players
 - Generates suspicion statements and final votes
 
+#### AI Judge System
+- `ai_judge.py` implements a panel of AI judges with different analytical approaches
+- Three judges (Holmes, Watson, and Poirot) analyze character responses using distinct methodologies:
+  1. **Human Traits Approach** (Judge Holmes): Looks for characteristics typically associated with human responses such as emotional depth, spontaneity, or personal anecdotes
+  2. **Odd One Out Approach** (Judge Watson): Identifies the response that differs from the pattern established by other responses, without focusing on predefined human traits
+  3. **Mixed Approach** (Judge Poirot): Combines both methodologies for a balanced analysis
+- Judges discuss their suspicions and debate who might be the human over multiple rounds
+- Final verdict is determined through judge consensus
+- Adds a new dimension of analysis beyond simple majority vote
+
+> **Interesting Finding**: In practice, the judge using the "Human Traits" approach often misidentifies AI responses as human when they exhibit complexity and creativity. This reflects a fascinating reversal in the Turing Test paradigm: modern AI can sometimes appear *more* creative and complex than actual human responses, leading to incorrect attributions of humanity to AI.
+
 #### Game Engine
-- `game_engine.py` manages the overall game flow
-- Handles character selection, question rounds, and voting
-- Determines game outcome based on votes
-- Supports both terminal and graphical interfaces
+- `game_engine.py` manages the standard mode game flow
+- `interrogation_mode.py` implements the alternative interrogation mode
+- Handles character selection, questions/interrogations, and judge analysis
+- Determines game outcome based on judges' final verdict
 
 #### User Interfaces
 
@@ -104,11 +131,6 @@ gameProject/
 - `human_interface.py` provides a text-based interface
 - Uses colorama for enhanced terminal output
 - Simple navigation through numbered options
-
-**Pygame Interface**
-- `gui.py` and `assets.py` implement a graphical interface
-- Character avatars, message bubbles, and interactive elements
-- Mouse-based navigation and input
 
 **Web Interface**
 - `app.py` implements a Flask web application
@@ -167,10 +189,13 @@ Respond with just the character's name that you're voting for.
 
 ### Data Flow
 
+#### Standard Mode
+
 1. **Game Initialization**:
    - Load character profiles and question bank
    - Player selects character
    - AI players are created for remaining characters
+   - AI judges are created with different analytical approaches
    - Questions are selected for the game
 
 2. **Question Round**:
@@ -178,20 +203,50 @@ Respond with just the character's name that you're voting for.
    - Human player provides response for their character
    - AI responses are generated via OpenAI API
    - All responses are displayed
+   - AI judges analyze the responses
 
-3. **Suspicion Phase**:
-   - Human player expresses suspicions
-   - AI suspicions are generated via OpenAI API
-   - All suspicions are displayed
+3. **Judge Discussion Phase**:
+   - AI judges discuss their analyses and suspicions
+   - Multiple rounds of discussion occur between judges
+   - Judges may influence each other's opinions
 
-4. **Voting Phase**:
-   - Human player votes for a character
-   - AI votes are generated via OpenAI API
-   - Votes are tallied
+4. **Final Voting Phase**:
+   - Judges cast their final votes on who they think is human
+   - Votes are tallied to reach a consensus
 
 5. **Result Determination**:
-   - If most votes are for the human player's character, human loses
-   - If most votes are for another character, human wins
+   - If judges correctly identify the human player, human loses
+   - If judges incorrectly identify another character, human wins
+
+#### Interrogation Mode
+
+1. **Game Initialization**:
+   - Load character profiles
+   - Player selects character
+   - AI players are created for remaining characters
+
+2. **Introduction Phase**:
+   - All characters introduce themselves
+   - Sets the stage for targeted questioning
+
+3. **Interrogation Rounds**:
+   - Each character (including human) takes turns asking questions
+   - Characters can select who they want to interrogate
+   - Human player crafts questions for other characters
+   - AI characters generate targeted questions via OpenAI API
+
+4. **Response Phase**:
+   - Questioned character provides a response
+   - Human responds when their character is questioned
+   - AI responses are generated via OpenAI API
+
+5. **Suspicion Phase**:
+   - Characters express suspicions after each round
+   - Suspicions become more refined over multiple rounds
+
+6. **Voting Phase**:
+   - All characters vote on who they think is human
+   - Final verdict is determined through majority vote
 
 ### API Usage Optimization
 

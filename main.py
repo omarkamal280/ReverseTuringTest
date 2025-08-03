@@ -28,7 +28,6 @@ def main():
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Reverse Turing Test Game')
-    parser.add_argument('--terminal', action='store_true', help='Run in terminal mode')
     parser.add_argument('--mode', choices=['standard', 'interrogation'], default='standard',
                       help='Game mode: standard (preset questions) or interrogation (characters question each other)')
     args = parser.parse_args()
@@ -44,15 +43,10 @@ def main():
     else:
         game = GameEngine()
     
-    # Set interface based on arguments
-    if args.terminal:
-        # Terminal mode
-        interface = TerminalInterface()
-        interface.game_mode = args.mode
-        game.interface = interface
-    else:
-        # GUI mode
-        game.use_gui = True
+    # Set terminal interface
+    interface = TerminalInterface()
+    interface.game_mode = args.mode
+    game.interface = interface
     
     try:
         game.run_game()

@@ -84,20 +84,24 @@ class AIJudge:
         
         print(f"\n=== STARTING JUDGE DISCUSSION ===\n")
         print(f"Initial votes: {judge_votes}\n")
+        print(f"=== DEBUG: JUDGE DISCUSSION DATA ===\n")
         
         while current_round <= max_rounds and not consensus_reached:
             print(f"\n--- DISCUSSION ROUND {current_round} ---")
             round_messages = []
             
-            # Create the discussion prompt
-            discussion_prompt = self._create_discussion_prompt(
-                judge_votes, discussion_history, all_characters, all_questions, current_round
-            )
-            
             # Each judge contributes to the discussion
+            round_messages = []
+            current_round_discussion = ""
+            
             for judge in [self] + other_judges:
+                # Create a discussion prompt for each judge that includes previous judges' comments in this round
+                judge_discussion_prompt = self._create_discussion_prompt(
+                    judge_votes, discussion_history, all_characters, all_questions, current_round, judge.name, current_round_discussion
+                )
+                
                 print(f"Getting response from Judge {judge.name}...")
-                judge_message = judge._call_openai_api(discussion_prompt)
+                judge_message = judge._call_openai_api(judge_discussion_prompt)
                 
                 # Validate and clean up the judge's message
                 # Remove any instances where the judge included their own name
@@ -111,11 +115,18 @@ class AIJudge:
                 
                 print(f"Judge {judge.name}: {judge_message}")
                 round_messages.append({"judge": judge.name, "message": judge_message})
-                discussion_prompt += f"\n{judge.name}: {judge_message}"
+                
+                # Add this judge's message to the current round discussion for the next judge to see
+                current_round_discussion += f"Judge {judge.name}: {judge_message}\n"
             
             # Add this round to the discussion history
             discussion_history.append(round_messages)
-            print(f"Added round {current_round} to discussion history. Current history length: {len(discussion_history)}")
+            
+            # Display detailed discussion information for debugging
+            print(f"Discussion history length: {len(discussion_history)}")
+            print(f"Round {current_round} messages: {len(round_messages)}")
+            for msg in round_messages:
+                print(f"  Judge {msg['judge']}: {msg['message']}")
             
             # Update votes based on the discussion
             new_votes = {}
@@ -159,9 +170,17 @@ class AIJudge:
             vote_counts = {}
             for vote in judge_votes.values():
                 vote_counts[vote] = vote_counts.get(vote, 0) + 1
+            
+            # Print current votes after this round
+            print(f"\nVotes after round {current_round}:")
+            for judge_name, vote in judge_votes.items():
+                print(f"  Judge {judge_name} votes for: {vote}")
                 
             if len(vote_counts) == 1:
                 consensus_reached = True
+                print(f"\nConsensus reached! All judges agree on: {list(vote_counts.keys())[0]}")
+            else:
+                print(f"\nNo consensus yet. Vote distribution: {vote_counts}")
                 
             current_round += 1
         
@@ -178,6 +197,17 @@ class AIJudge:
             if count > max_votes:
                 max_votes = count
                 final_verdict = character
+        
+        # Print final verdict information
+        print(f"\n=== FINAL VERDICT ===")
+        print(f"Final votes: {judge_votes}")
+        print(f"Vote distribution: {vote_counts}")
+        print(f"Final verdict (majority): {final_verdict} with {max_votes} votes")
+        
+        # Display the complete discussion history
+        self._display_full_discussion_history(discussion_history)
+        
+        print(f"=== END OF JUDGE DISCUSSION ===\n")
                 
         return final_verdict, discussion_history
     
@@ -299,7 +329,7 @@ Respond with just the character's name that you're voting for.
         
         return prompt
     
-    def _create_discussion_prompt(self, judge_votes, discussion_history, all_characters, all_questions, current_round):
+    def _create_discussion_prompt(self, judge_votes, discussion_history, all_characters, all_questions, current_round, judge_name=None, current_round_discussion=None):
         """Create prompt for judges to discuss their votes."""
         # Create a summary of the game
         game_summary = ""
@@ -324,8 +354,23 @@ Respond with just the character's name that you're voting for.
             for message in round_messages:
                 discussion_summary += f"{message['judge']}: {message['message']}\n"
         
+        # Use the provided judge_name or default to self.name
+        judge_name = judge_name or self.name
+        
+        # Find the judge's approach based on the name
+        judge_approach = self.approach
+        if judge_name != self.name:
+            # Map judge names to their approaches
+            judge_approaches = {
+                'Holmes': 'human_traits',
+                'Watson': 'odd_one_out',
+                'Poirot': 'mixed'
+            }
+            if judge_name in judge_approaches:
+                judge_approach = judge_approaches[judge_name]
+        
         # Create the prompt
-        prompt = f"""You are Judge {self.name} participating in a panel discussion with other judges to determine who is the human player in a game.
+        prompt = f"""You are Judge {judge_name} participating in a panel discussion with other judges to determine who is the human player in a game.
 
 Game summary:
 {game_summary}
@@ -334,11 +379,19 @@ Game summary:
 
 {discussion_summary}
 
---- DISCUSSION ROUND {current_round} ---
+--- DISCUSSION ROUND {current_round} ---"""
+        
+        # Add current round discussion if available
+        if current_round_discussion:
+            prompt += f"""
+{current_round_discussion}
+"""
+        
+        prompt += f"""
 It's now your turn to speak. Discuss your reasoning for your vote and respond to points raised by other judges.
 
 IMPORTANT INSTRUCTIONS:
-1. Speak ONLY as Judge {self.name}. Do NOT simulate dialogue from other judges or characters.
+1. Speak ONLY as Judge {judge_name}. Do NOT simulate dialogue from other judges or characters.
 2. Do NOT include other names like "Holmes:", "Watson:", "Poirot:", etc. in your response.
 3. Do NOT create fictional dialogue or conversations within your response.
 4. Simply state your own opinion and reasoning directly.
@@ -349,11 +402,11 @@ IMPORTANT INSTRUCTIONS:
 """
 
         # Add role-specific instructions based on the judge's approach
-        if self.approach == 'human_traits':
+        if judge_approach == 'human_traits':
             prompt += """
 As Judge Holmes, you focus on identifying human traits in responses. Look for emotional depth, personal anecdotes, humor, or unique perspectives that suggest human thinking.
 """
-        elif self.approach == 'odd_one_out':
+        elif judge_approach == 'odd_one_out':
             prompt += """
 As Judge Watson, you focus on identifying pattern breakers. Look for responses that stand out from the group in terms of style, structure, or content that break AI patterns.
 """
@@ -395,6 +448,22 @@ Your complete response (just the name):
 """
         
         return prompt
+    
+    def _display_full_discussion_history(self, discussion_history):
+        """Display the complete discussion history with detailed information."""
+        print("\n=== COMPLETE JUDGE DISCUSSION HISTORY ===")
+        print(f"Total discussion rounds: {len(discussion_history)}")
+        
+        for round_idx, round_messages in enumerate(discussion_history):
+            print(f"\n--- ROUND {round_idx + 1} DETAILED DISCUSSION ---")
+            print(f"Number of messages in this round: {len(round_messages)}")
+            
+            for msg in round_messages:
+                print(f"Judge {msg['judge']} said:")
+                print(f"{msg['message']}")
+                print("-" * 40)  # Separator between messages
+        
+        print("\n=== END OF COMPLETE DISCUSSION HISTORY ===\n")
     
     def _call_openai_api(self, prompt):
         """Call OpenAI API with the given prompt."""
